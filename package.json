@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@fontsource/opendyslexic": "^5.2.5",
+    "@huggingface/transformers": "^4.2.0",
     "drizzle-orm": "0.45.2",
     "jszip": "^3.10.1",
     "mammoth": "^1.10.0",

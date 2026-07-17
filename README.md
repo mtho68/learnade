@@ -1,108 +1,59 @@
-# vinext-starter
+# Learnade
 
-A clean full-stack starter running on
-[vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and
-Drizzle support.
+Learnade turns PDFs, DOCX files, PPTX decks, TXT files, and pasted notes into a neuroinclusive study workspace. Everything can run in the browser without asking a learner for an API key.
 
-## Prerequisites
+## What it does
 
-- Node.js `>=22.13.0`
-- Linux with `flock`, `curl`, and GNU `timeout`
+- Accessible Reader with the real OpenDyslexic font, adjustable type, and line focus
+- RSVP Speed Reader with a stable focal point and punctuation-aware pacing
+- Brainrot Mode with Minecraft parkour or Subway Surfers gameplay, synchronized captions, and browser-generated narration
+- ADHD-friendly focus session with a Pomodoro-style timer and smaller-step rescue
+- Source-grounded study guides, flashcards with review/known stacks, and multi-question quizzes
+- Local document extraction and an IndexedDB learning library
+- Optional free on-device AI using `onnx-community/Qwen2.5-0.5B-Instruct` through Transformers.js; WebGPU users download the quantized model once, and source text stays in their browser
+- A deterministic instant generator remains available when AI is declined, unsupported, or offline
 
-## Sites Lifecycle
+## Inspiration
 
-The Sites lifecycle CLI runs the locked dependency install before returning this checkout. Edit the source under `app/`, then checkpoint when a coherent milestone is ready to inspect or share. The remote Sites builder runs `npm run build` against the pushed commit. Do not repeat install or build as a normal pre-checkpoint step.
+Long-form studying can make the material feel harder to enter than it needs to be. Learnade was inspired by the desire to make learning more accessible—not only for learners with dyslexia or ADHD, but for anyone whose attention, energy, or reading needs change from day to day.
 
-This starter does not use `wrangler.jsonc`.
+## How Codex and GPT-5.6 were used
 
-`install:ci` is intentionally a single, non-retrying `npm ci`. It refuses a concurrent install for the same project, consumes a matching image-seeded npm cache with `--prefer-offline` while retaining registry fallback for a missing cache object, otherwise downloads and verifies the complete vinext tarball recorded in `package-lock.json`, limits npm to one socket, and terminates a stalled install. `build` applies a short timeout and then validates the Sites artifact. These helpers target Linux and use GNU `timeout`; they are not native macOS scripts.
+Learnade was designed and implemented collaboratively in Codex with GPT-5.6. They helped turn the product idea into an architecture, build the React application, implement document extraction and browser storage, create and refine the accessible UI, debug interaction problems, research model and media licensing, run automated QA, and prepare deployment. Codex was the development workspace and agent; GPT-5.6 supplied the reasoning and coding capability used during development.
 
-Scripts that need writable project-scoped home, npm, XDG, and temporary paths use `scripts/sites-env.sh`. The `dev` and `start` scripts honor the caller's runtime environment and keep Wrangler logs inside the checkout. The generated `.sites-runtime/` directory is disposable and ignored by Git.
+They are not hidden runtime dependencies and learners do not need an OpenAI key. At runtime, the optional generative feature uses the openly licensed Qwen2.5 0.5B model locally in the browser. The non-AI path is fully client-side and deterministic.
 
-## Included Shape
+## Challenges
 
-- edit site code under `app/`
-- `app/chatgpt-auth.ts` provides optional dispatch-owned ChatGPT sign-in helpers
-- `.openai/hosting.json` declares optional Sites D1 and R2 bindings
-- `vite.config.ts` simulates declared bindings for local development
-- `db/index.ts` reads the D1 binding from the Cloudflare Worker environment
-- `db/schema.ts` starts intentionally empty
-- `examples/d1/` contains an optional D1 example surface
-- `drizzle.config.ts` supports local migration generation when needed
+The project was built under a tight Build Week timeline. The hardest parts were balancing ambitious multimodal learning modes with privacy, no-key onboarding, accessible controls, document parsing, browser compatibility, and honest source grounding.
 
-## Workspace Auth Headers
+## Accomplishments
 
-OpenAI workspace sites can read the current user's email from
-`oai-authenticated-user-email`.
+Learnade supports several genuinely different ways to approach the same source material while keeping the learner in control. It includes a real dyslexia-oriented font, study-state-aware flashcards, functional quiz progression and feedback, source links, focus supports, and a no-account/no-key local-first architecture.
 
-SIWC-authenticated workspace sites may also receive
-`oai-authenticated-user-full-name` when the user's SIWC profile has a non-empty
-`name` claim. The full-name value is percent-encoded UTF-8 and is accompanied by
-`oai-authenticated-user-full-name-encoding: percent-encoded-utf-8`.
+## What we learned
 
-Treat the full name as optional and fall back to email when it is absent:
+We learned more about inclusive study methods, responsible assistive UX, small browser models, WebGPU, local-first storage, multimodal focus aids, project management, and shipping quickly without pretending heuristic output is AI.
 
-```tsx
-import { headers } from "next/headers";
+## What is next
 
-export default async function Home() {
-  const requestHeaders = await headers();
-  const email = requestHeaders.get("oai-authenticated-user-email");
-  const encodedFullName = requestHeaders.get("oai-authenticated-user-full-name");
-  const fullName =
-    encodedFullName &&
-    requestHeaders.get("oai-authenticated-user-full-name-encoding") ===
-      "percent-encoded-utf-8"
-      ? decodeURIComponent(encodedFullName)
-      : null;
+- Human usability testing with students and accessibility specialists
+- OCR for scanned PDFs
+- More robust long-document chunking and model-quality evaluation
+- Installable PWA and eventual app-store packaging
+- Optional encrypted cross-device sync
 
-  const displayName = fullName ?? email;
-  // ...
-}
+## Local development
+
+Requires Node.js 22.13 or newer.
+
+```bash
+npm install
+npm run dev
 ```
 
-## Optional Dispatch-Owned ChatGPT Sign-In
+Run production verification with `npm test`.
 
-Import the ready-to-use helpers from `app/chatgpt-auth.ts` when the site needs
-optional or required ChatGPT sign-in:
+## Privacy and model notes
 
-- Use `getChatGPTUser()` for optional signed-in UI.
-- Use `requireChatGPTUser(returnTo)` for server-rendered pages that should send
-  anonymous visitors through Sign in with ChatGPT.
-- Use `chatGPTSignInPath(returnTo)` and `chatGPTSignOutPath(returnTo)` for
-  browser links or actions.
-- Pass a same-origin relative `returnTo` path for the destination after sign-in
-  or sign-out. The helper validates and safely encodes it.
-- Mark protected pages with `export const dynamic = "force-dynamic"` because
-  they depend on per-request identity headers.
-
-Dispatch owns `/signin-with-chatgpt`, `/signout-with-chatgpt`, `/callback`, the
-OAuth cookies, and identity header injection. Do not implement app routes for
-those reserved paths. Routes that do not import and call the helper remain
-anonymous-compatible.
-
-SIWC establishes identity only; it does not prove workspace membership. Use the
-Sites hosting platform's access policy controls for workspace-wide restrictions,
-or enforce explicit server-side membership or allowlist checks.
-
-Use SIWC for account pages, user-specific dashboards, saved records, and write
-actions tied to the current ChatGPT user. Leave public content anonymous.
-
-## Diagnostic Commands
-
-- `npm run install:ci`: perform the one bounded lockfile install
-- `npm run dev`: start the Vite/Vinext development server
-- `npm run build`: build and validate the deployable Sites artifact
-- `npm run start`: start the built Vinext application
-- `npm test`: build, validate, and verify the rendered development-preview metadata
-- `npm run validate:artifact`: recheck an existing artifact's manifest and ESM `default.fetch` export
-- `npm run db:generate`: generate Drizzle migrations after schema changes
-
-Use build and validation commands for targeted diagnosis after a remote failure, not as part of the normal checkpoint path.
-
-The timeout defaults can be overridden for a controlled canary with `SITES_INSTALL_TIMEOUT`, `SITES_INSTALL_KILL_AFTER`, `SITES_BUILD_TIMEOUT`, and `SITES_BUILD_KILL_AFTER`. A timeout fails the command; the helpers never retry an unchanged install or build.
-
-## Learn More
-
-- [vinext Documentation](https://github.com/cloudflare/vinext)
-- [Drizzle D1 Guide](https://orm.drizzle.team/docs/get-started/d1-new)
+Uploaded text, generated materials, and progress are stored in the browser. The AI enhancement is opt-in because its first use downloads roughly 500 MB and requires WebGPU. The Qwen model is Apache-2.0 licensed. Embedded gameplay is linked and attributed in the product; availability remains subject to the video host.

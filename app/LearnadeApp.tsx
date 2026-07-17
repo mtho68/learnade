@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import "@fontsource/opendyslexic/400.css";
 import { extractDocument } from "../lib/extractDocument";
 import { generateLocalLearningPackage, type LearningPackage } from "../lib/localLearning";
+import { generateWithBrowserAI } from "../lib/browserAI";
+import { deleteLibraryItem, loadLibrary, saveLibraryItem } from "../lib/storage";
 
 type Mode = "home" | "reader" | "speed" | "focus" | "brainrot" | "guide" | "cards" | "quiz";
 
@@ -35,23 +37,20 @@ export default function LearnadeApp() {
   const [saved, setSaved] = useState(true);
 
   useEffect(() => {
-    const storedLibrary = localStorage.getItem("learnade-library");
-    if (storedLibrary) {
-      try { const parsed = JSON.parse(storedLibrary) as SavedLearnade[]; setLibrary(parsed); if(parsed[0]) { setSource(parsed[0].source); setTitle(parsed[0].title); setLearningPackage(parsed[0].package); setActiveId(parsed[0].id); } } catch {}
-    }
+    loadLibrary<SavedLearnade>().then(parsed => { const sorted=parsed.sort((a,b)=>b.createdAt.localeCompare(a.createdAt)); setLibrary(sorted); if(sorted[0]) { setSource(sorted[0].source); setTitle(sorted[0].title); setLearningPackage(sorted[0].package); setActiveId(sorted[0].id); } }).catch(()=>{});
   }, []);
 
-  const saveSource = (value: string, name: string) => {
+  const saveSource = async (value: string, name: string, generated?:LearningPackage) => {
     const finalTitle = name || "My new Learnade";
-    const generated = generateLocalLearningPackage(value, finalTitle);
-    const item:SavedLearnade = { id:crypto.randomUUID(), title:finalTitle, source:value, createdAt:new Date().toISOString(), package:generated };
+    const finalPackage = generated || generateLocalLearningPackage(value, finalTitle);
+    const item:SavedLearnade = { id:crypto.randomUUID(), title:finalTitle, source:value, createdAt:new Date().toISOString(), package:finalPackage };
     const next = [item, ...library];
-    setSource(value); setTitle(finalTitle); setLearningPackage(generated); setLibrary(next); setActiveId(item.id);
-    localStorage.setItem("learnade-library", JSON.stringify(next)); setSaved(true);
+    setSource(value); setTitle(finalTitle); setLearningPackage(finalPackage); setLibrary(next); setActiveId(item.id);
+    await saveLibraryItem(item); setSaved(true);
   };
 
   const openItem = (item:SavedLearnade) => { setSource(item.source); setTitle(item.title); setLearningPackage(item.package); setActiveId(item.id); setMode("reader"); };
-  const deleteItem = (id:string) => { const next=library.filter(item=>item.id!==id); setLibrary(next); localStorage.setItem("learnade-library",JSON.stringify(next)); };
+  const deleteItem = (id:string) => { if(!confirm("Delete this Learnade and its saved material?")) return; setLibrary(items=>items.filter(item=>item.id!==id)); void deleteLibraryItem(id); };
 
   if (mode !== "home") {
     return <StudyMode mode={mode} title={title} source={source} learningPackage={learningPackage} learnadeId={activeId} onChangeMode={setMode} onBack={() => setMode("home")} />;
@@ -90,8 +89,8 @@ export default function LearnadeApp() {
 
       <section className="continue-card">
         <div className="material-icon">☀</div>
-        <div className="material-copy"><span className="eyebrow">CONTINUE LEARNING</span><h2>{title}</h2><p>Biology · 7 learning modes ready</p></div>
-        <div className="progress-copy"><strong>38%</strong><span>complete</span></div>
+        <div className="material-copy"><span className="eyebrow">CONTINUE LEARNING</span><h2>{title}</h2><p>Study material · 7 learning modes ready</p></div>
+        <div className="progress-copy"><strong>{learningPackage.sections.length}</strong><span>sections</span></div>
         <div className="progress-track"><i /></div>
         <button className="round-button" onClick={() => setMode("reader")} aria-label="Continue learning">→</button>
       </section>
@@ -112,18 +111,19 @@ export default function LearnadeApp() {
         {library.length === 0 ? <div className="library-empty"><strong>Your first Learnade will appear here.</strong><p>Upload a document or paste notes to create it.</p><button className="secondary" onClick={()=>setShowUpload(true)}>Create one now</button></div> : <div className="library-grid">{library.map(item=><article key={item.id}><button className="library-open" onClick={()=>openItem(item)}><span className="material-icon">L</span><span><small>{new Date(item.createdAt).toLocaleDateString()}</small><strong>{item.title}</strong><em>{item.package.sections.length} sections · {item.package.flashcards.length} cards</em></span></button><button className="delete-item" onClick={()=>deleteItem(item.id)} aria-label={`Delete ${item.title}`}>×</button></article>)}</div>}
       </section>
 
-      {showUpload && <UploadModal source="" onClose={() => setShowUpload(false)} onCreate={(text, name) => { saveSource(text,name); setShowUpload(false); }} />}
+      {showUpload && <UploadModal source="" onClose={() => setShowUpload(false)} onCreate={async (text, name, generated) => { await saveSource(text,name,generated); setShowUpload(false); }} />}
     </main>
   );
 }
 
-function UploadModal({ source, onClose, onCreate }: { source: string; onClose: () => void; onCreate: (text: string, title: string) => void }) {
+function UploadModal({ source, onClose, onCreate }: { source: string; onClose: () => void; onCreate: (text: string, title: string, generated?:LearningPackage) => Promise<void> }) {
   const [text, setText] = useState(source);
   const [name, setName] = useState("");
   const [fileName, setFileName] = useState("");
   const [extracting, setExtracting] = useState(false);
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
+  const [useAI, setUseAI] = useState(false);
   const selectFile = async (file?: File) => {
     if (!file) return;
     setFileName(file.name); setExtracting(true); setError(""); setStatus("Reading your material…");
@@ -137,9 +137,10 @@ function UploadModal({ source, onClose, onCreate }: { source: string; onClose: (
   };
   const create = async () => {
     if (text.trim().length < 40) { setError("Add a little more study material before continuing."); return; }
-    setStatus("Building your private learning package on this device…");
-    await new Promise((resolve)=>setTimeout(resolve,250));
-    onCreate(text, name);
+    const finalTitle=name || "My new Learnade"; let generated:LearningPackage|undefined;
+    if(useAI){ try { generated=await generateWithBrowserAI(text,finalTitle,setStatus); } catch { setStatus("On-device AI was unavailable, so Learnade used its private instant generator instead."); } }
+    else setStatus("Building your private learning package on this device…");
+    await onCreate(text, name, generated);
   };
   return <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="upload-title">
     <div className="modal">
@@ -152,6 +153,7 @@ function UploadModal({ source, onClose, onCreate }: { source: string; onClose: (
       <div className="or"><span>or paste text</span></div>
       <label className="field"><span>Material title</span><input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Week 4: Cellular respiration" /></label>
       <label className="field"><span>Study material</span><textarea value={text} onChange={e => setText(e.target.value)} rows={7} /></label>
+      <label className="ai-option"><input type="checkbox" checked={useAI} onChange={e=>setUseAI(e.target.checked)} /><span><strong>Enhance with free on-device AI</strong><small>Optional. Downloads about 500 MB once, needs WebGPU, uses no API key, and keeps text in your browser.</small></span></label>
       {error && <p className="form-error" role="alert">{error}</p>}
       <div className="modal-actions"><button className="secondary" onClick={onClose}>Cancel</button><button className="primary" disabled={extracting} onClick={create}>{extracting ? "Reading file…" : "Create my Learnade →"}</button></div>
     </div>
@@ -160,16 +162,17 @@ function UploadModal({ source, onClose, onCreate }: { source: string; onClose: (
 
 function StudyMode({ mode, title, source, learningPackage, learnadeId, onChangeMode, onBack }: { mode: Mode; title: string; source: string; learningPackage:LearningPackage; learnadeId:string; onChangeMode:(mode:Mode)=>void; onBack: () => void }) {
   const label = modes.find(m => m.id === mode)?.title || "Study";
+  const [readerTarget,setReaderTarget]=useState<string|null>(null);
   return <main className="study-shell">
-    <header className="study-topbar"><button className="brand" onClick={onBack}><span className="brand-mark">L</span>Learnade</button><div><small>BIOLOGY</small><strong>{title}</strong></div><button className="secondary" onClick={onBack}>Exit session</button></header>
+    <header className="study-topbar"><button className="brand" onClick={onBack}><span className="brand-mark">L</span>Learnade</button><div><small>STUDY MATERIAL</small><strong>{title}</strong></div><button className="secondary" onClick={onBack}>Exit session</button></header>
     <div className="study-layout">
-      <aside><button className="back-link" onClick={onBack}>← <span>All modes</span></button><span className="eyebrow">LEARNING MODE</span><h1>{label}</h1><p>Switch whenever your attention or energy changes.</p><div className="side-progress"><span>Session progress</span><strong>38%</strong><i><b /></i></div></aside>
+      <aside><button className="back-link" onClick={onBack}>← <span>All modes</span></button><span className="eyebrow">LEARNING MODE</span><h1>{label}</h1><p>Switch whenever your attention or energy changes.</p><div className="side-progress"><span>Ready to study</span><strong>{learningPackage.sections.length}</strong><span>source sections</span></div></aside>
       <section className="workspace">
-        {mode === "reader" && <Reader source={source} title={title} />}
+        {mode === "reader" && <Reader learningPackage={learningPackage} title={title} target={readerTarget} />}
         {mode === "speed" && <SpeedReader source={source} />}
         {mode === "focus" && <FocusMode learningPackage={learningPackage} />}
         {mode === "brainrot" && <Brainrot source={learningPackage.narration} />}
-        {mode === "guide" && <Guide learningPackage={learningPackage} onReview={()=>onChangeMode("reader")} />}
+        {mode === "guide" && <Guide learningPackage={learningPackage} onReview={(id)=>{setReaderTarget(id);onChangeMode("reader")}} />}
         {mode === "cards" && <Cards cards={learningPackage.flashcards} learnadeId={learnadeId} />}
         {mode === "quiz" && <Quiz questions={learningPackage.quiz} learnadeId={learnadeId} />}
       </section>
@@ -177,14 +180,15 @@ function StudyMode({ mode, title, source, learningPackage, learnadeId, onChangeM
   </main>;
 }
 
-function Reader({ source, title }: { source: string; title:string }) {
+function Reader({ learningPackage, title, target }: { learningPackage:LearningPackage; title:string; target:string|null }) {
   const [dyslexia, setDyslexia] = useState(false); const [size, setSize] = useState(19); const [focus, setFocus] = useState(false);
-  return <div className="reader-panel"><div className="tool-row"><button className={dyslexia ? "tool active" : "tool"} onClick={() => setDyslexia(!dyslexia)} aria-pressed={dyslexia}>OpenDyslexic font</button><button className={focus ? "tool active" : "tool"} onClick={() => setFocus(!focus)} aria-pressed={focus}>Line focus</button><label>Text size <input type="range" min="16" max="28" value={size} onChange={e => setSize(+e.target.value)} /></label></div><article className={`${dyslexia ? "dyslexia" : ""} ${focus ? "line-focus" : ""}`} style={{fontSize: size}}><span className="eyebrow">SOURCE READER</span><h2>{title}</h2>{source.split(/(?<=[.!?])\s+/).map((sentence, i) => <p id={`source-sentence-${i+1}`} key={i}>{sentence}</p>)}</article></div>;
+  useEffect(()=>{if(target) requestAnimationFrame(()=>document.getElementById(`reader-${target}`)?.scrollIntoView({behavior:"smooth",block:"center"}))},[target]);
+  return <div className="reader-panel"><div className="tool-row"><button className={dyslexia ? "tool active" : "tool"} onClick={() => setDyslexia(!dyslexia)} aria-pressed={dyslexia}>OpenDyslexic font</button><button className={focus ? "tool active" : "tool"} onClick={() => setFocus(!focus)} aria-pressed={focus}>Line focus</button><label>Text size <input type="range" min="16" max="28" value={size} onChange={e => setSize(+e.target.value)} /></label></div><article className={`${dyslexia ? "dyslexia" : ""} ${focus ? "line-focus" : ""}`} style={{fontSize: size}}><span className="eyebrow">SOURCE READER</span><h2>{title}</h2>{learningPackage.sections.map(section=><section id={`reader-${section.id}`} className={target===section.id?"source-highlight":""} key={section.id}><h3>{section.title}</h3>{section.sentences.map((sentence,i)=><p key={i}>{sentence}</p>)}</section>)}</article></div>;
 }
 
 function SpeedReader({ source }: { source: string }) {
   const words = useMemo(() => source.split(/\s+/), [source]); const [index, setIndex] = useState(0); const [playing, setPlaying] = useState(false); const [wpm, setWpm] = useState(300);
-  useEffect(() => { if (!playing) return; const timer = setInterval(() => setIndex(i => i >= words.length - 1 ? 0 : i + 1), 60000 / wpm); return () => clearInterval(timer); }, [playing, wpm, words.length]);
+  useEffect(() => { if (!playing) return; const current=words[index]||""; const pause=/[.!?]$/.test(current)?1.8:/[,;:]$/.test(current)?1.35:Math.max(1,current.length/9); const timer=setTimeout(()=>setIndex(i=>{if(i>=words.length-1){setPlaying(false);return i}return i+1}),60000/wpm*pause); return()=>clearTimeout(timer); }, [playing, wpm, words, index]);
   const word = words[index] || "Ready"; const pivot = Math.floor(word.length * .4);
   return <div className="speed-panel"><span className="eyebrow">RAPID SERIAL VISUAL PRESENTATION</span><div className="speed-word">{word.slice(0,pivot)}<em>{word[pivot]}</em>{word.slice(pivot+1)}</div><div className="speed-line"><i style={{width: `${(index / words.length) * 100}%`}} /></div><div className="speed-controls"><button onClick={() => setIndex(Math.max(0,index-10))}>↶ 10</button><button className="play" onClick={() => setPlaying(!playing)} aria-label={playing ? "Pause speed reader" : "Play speed reader"}>{playing ? <PauseIcon /> : <PlayIcon />}</button><button onClick={() => setIndex(Math.min(words.length-1,index+10))}>10 ↷</button></div><label className="wpm">{wpm} words per minute<input type="range" min="100" max="700" step="25" value={wpm} onChange={e => setWpm(+e.target.value)} /></label><p className="calm-note">Start at a pace that feels comfortable. Comprehension matters more than speed.</p></div>;
 }
@@ -213,7 +217,7 @@ function Brainrot({ source }: { source: string }) {
   return <div className="brainrot-panel"><div className="visual-picker" aria-label="Choose background gameplay"><button className={visual==="minecraft"?"active":""} onClick={()=>setVisual("minecraft")}>Minecraft parkour</button><button className={visual==="subway"?"active":""} onClick={()=>setVisual("subway")}>Subway Surfers</button></div><div className="brain-visual"><iframe key={videoId} src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&mute=1&controls=0&loop=1&playlist=${videoId}&modestbranding=1&rel=0`} title={visual === "minecraft" ? "Minecraft parkour visual focus gameplay" : "Subway Surfers visual focus gameplay"} allow="autoplay; encrypted-media; picture-in-picture" referrerPolicy="strict-origin-when-cross-origin" /><div className="video-shade" /><div className="video-label">VISUAL FOCUS · {visual === "minecraft" ? "MINECRAFT PARKOUR" : "SUBWAY SURFERS"}</div></div><div className="caption" aria-live="polite"><span className="eyebrow">NOW EXPLAINING · {sentenceIndex+1} OF {narrationSentences.length}</span><p>{narrationSentences[sentenceIndex]}</p></div><div className="brain-controls"><button onClick={()=>skip(-1)} aria-label="Previous narration segment">←</button><button className="play" onClick={toggle} aria-label={speaking ? "Pause narration" : "Play narration"}>{speaking ? <PauseIcon /> : <PlayIcon />}</button><button onClick={()=>skip(1)} aria-label="Next narration segment">→</button><span>{speaking ? "Narrating with captions" : "Ready to listen"}</span></div><div className="voice-controls"><label>Voice<select value={voiceName} onChange={e=>setVoiceName(e.target.value)}>{voices.filter(v=>v.lang.startsWith("en")).map(v=><option key={v.name} value={v.name}>{v.name}</option>)}</select></label><label>Speed<select value={rate} onChange={e=>setRate(Number(e.target.value))}><option value={0.8}>0.8×</option><option value={1.05}>1×</option><option value={1.25}>1.25×</option><option value={1.5}>1.5×</option></select></label></div><p className="calm-note">Voice is generated on your device. {visual === "minecraft" ? <><a href="https://www.youtube.com/watch?v=XBIaqOm0RKQ" target="_blank" rel="noreferrer">Minecraft gameplay by GameplaysForFree</a>, licensed <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a>.</> : <><a href="https://www.youtube.com/watch?v=QPW3XwBoQlw" target="_blank" rel="noreferrer">Subway Surfers gameplay</a> is marked free to use by its creator.</>}</p></div>;
 }
 
-function Guide({learningPackage,onReview}:{learningPackage:LearningPackage;onReview:()=>void}) { const [open,setOpen]=useState<string | null>(learningPackage.sections[0]?.id||null); return <div className="guide"><span className="eyebrow">SOURCE-BUILT STUDY GUIDE</span><h2>{learningPackage.title} at a glance</h2><p className="guide-intro">Built privately on this device. Select a section to expand it and trace every point back to the source.</p><div className="overview-box"><strong>Overview</strong><p>{learningPackage.overview}</p></div><div className="guide-grid">{learningPackage.sections.map((item,index) => <section className={open===item.id ? "open" : ""} key={item.id}><button onClick={() => setOpen(open===item.id ? null : item.id)} aria-expanded={open===item.id}><span>{String(index+1).padStart(2,"0")}</span><h3>{item.title}</h3><p>{item.sentences[0]}</p><b>{open===item.id ? "−" : "+"}</b></button>{open===item.id && <div className="guide-detail"><p>{item.text}</p><button className="source-link" onClick={onReview}>Review in source →</button></div>}</section>)}</div><div className="key-term-list"><span className="eyebrow">KEY TERMS FROM YOUR SOURCE</span>{learningPackage.keyTerms.map(term=><article key={term.term}><strong>{term.term}</strong><p>{term.definition}</p></article>)}</div></div>; }
+function Guide({learningPackage,onReview}:{learningPackage:LearningPackage;onReview:(id:string)=>void}) { const [open,setOpen]=useState<string | null>(learningPackage.sections[0]?.id||null); return <div className="guide"><span className="eyebrow">SOURCE-BUILT STUDY GUIDE</span><h2>{learningPackage.title} at a glance</h2><p className="guide-intro">Built privately on this device. Select a section to expand it and trace every point back to the source.</p><div className="overview-box"><strong>Overview</strong><p>{learningPackage.overview}</p></div><div className="guide-grid">{learningPackage.sections.map((item,index) => <section className={open===item.id ? "open" : ""} key={item.id}><button onClick={() => setOpen(open===item.id ? null : item.id)} aria-expanded={open===item.id}><span>{String(index+1).padStart(2,"0")}</span><h3>{item.title}</h3><p>{item.sentences[0]}</p><b>{open===item.id ? "−" : "+"}</b></button>{open===item.id && <div className="guide-detail"><p>{item.text}</p><button className="source-link" onClick={()=>onReview(item.id)}>Review in source →</button></div>}</section>)}</div><div className="key-term-list"><span className="eyebrow">KEY TERMS FROM YOUR SOURCE</span>{learningPackage.keyTerms.map(term=><article key={term.term}><strong>{term.term}</strong><p>{term.definition}</p></article>)}</div></div>; }
 
 function Cards({cards,learnadeId}:{cards:LearningPackage["flashcards"];learnadeId:string}) {
   const storageKey=`learnade-cards-${learnadeId}`;
