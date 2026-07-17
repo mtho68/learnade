@@ -3,24 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import "@fontsource/opendyslexic/400.css";
 import { extractDocument } from "../lib/extractDocument";
+import { generateLocalLearningPackage, type LearningPackage } from "../lib/localLearning";
 
 type Mode = "home" | "reader" | "speed" | "focus" | "brainrot" | "guide" | "cards" | "quiz";
 
 const sampleText = `Photosynthesis is the process plants use to convert light energy into chemical energy. It occurs primarily in chloroplasts. During the light-dependent reactions, chlorophyll absorbs sunlight and helps produce ATP and NADPH. The Calvin cycle then uses that stored energy to convert carbon dioxide into glucose. Water is split during the light-dependent reactions, releasing oxygen as a byproduct. Temperature, light intensity, and carbon dioxide concentration can all affect the rate of photosynthesis.`;
 
-const cards = [
-  ["Where does photosynthesis primarily occur?", "Inside chloroplasts."],
-  ["What do the light-dependent reactions produce?", "ATP and NADPH."],
-  ["What does the Calvin cycle create?", "Glucose from carbon dioxide using stored energy."],
-];
-
-const quizQuestions = [
-  { prompt: "Which molecule provides energy for the Calvin cycle?", options: ["Oxygen", "ATP", "Glucose", "Carbon dioxide"], answer: 1, explanation: "ATP and NADPH are made during the light-dependent reactions and supply energy to the Calvin cycle." },
-  { prompt: "Where does photosynthesis primarily take place?", options: ["Mitochondria", "Nucleus", "Chloroplasts", "Cell membrane"], answer: 2, explanation: "Chloroplasts contain chlorophyll and the internal structures needed for both major stages of photosynthesis." },
-  { prompt: "Which substance is split to release oxygen?", options: ["Glucose", "Water", "Carbon dioxide", "NADPH"], answer: 1, explanation: "During the light-dependent reactions, water is split and oxygen is released as a byproduct." },
-  { prompt: "What does the Calvin cycle use carbon dioxide to build?", options: ["Glucose", "Oxygen", "Water", "Chlorophyll"], answer: 0, explanation: "The Calvin cycle uses carbon dioxide plus energy from ATP and NADPH to build glucose." },
-  { prompt: "Which can affect the rate of photosynthesis?", options: ["Light intensity", "Temperature", "Carbon dioxide concentration", "All of these"], answer: 3, explanation: "All three variables can become limiting factors and change the rate of photosynthesis." },
-];
+type SavedLearnade = { id:string; title:string; source:string; createdAt:string; package:LearningPackage };
 
 function PlayIcon() { return <span className="media-icon play-icon" aria-hidden="true" />; }
 function PauseIcon() { return <span className="media-icon pause-icon" aria-hidden="true"><i /><i /></span>; }
@@ -39,22 +28,33 @@ export default function LearnadeApp() {
   const [mode, setMode] = useState<Mode>("home");
   const [source, setSource] = useState(sampleText);
   const [title, setTitle] = useState("The essentials of photosynthesis");
+  const [learningPackage, setLearningPackage] = useState(() => generateLocalLearningPackage(sampleText, "The essentials of photosynthesis"));
+  const [library, setLibrary] = useState<SavedLearnade[]>([]);
+  const [activeId, setActiveId] = useState("demo");
   const [showUpload, setShowUpload] = useState(false);
   const [saved, setSaved] = useState(true);
 
   useEffect(() => {
-    const stored = localStorage.getItem("learnade-source");
-    if (stored) setSource(stored);
+    const storedLibrary = localStorage.getItem("learnade-library");
+    if (storedLibrary) {
+      try { const parsed = JSON.parse(storedLibrary) as SavedLearnade[]; setLibrary(parsed); if(parsed[0]) { setSource(parsed[0].source); setTitle(parsed[0].title); setLearningPackage(parsed[0].package); setActiveId(parsed[0].id); } } catch {}
+    }
   }, []);
 
-  const saveSource = (value: string) => {
-    setSource(value);
-    localStorage.setItem("learnade-source", value);
-    setSaved(true);
+  const saveSource = (value: string, name: string) => {
+    const finalTitle = name || "My new Learnade";
+    const generated = generateLocalLearningPackage(value, finalTitle);
+    const item:SavedLearnade = { id:crypto.randomUUID(), title:finalTitle, source:value, createdAt:new Date().toISOString(), package:generated };
+    const next = [item, ...library];
+    setSource(value); setTitle(finalTitle); setLearningPackage(generated); setLibrary(next); setActiveId(item.id);
+    localStorage.setItem("learnade-library", JSON.stringify(next)); setSaved(true);
   };
 
+  const openItem = (item:SavedLearnade) => { setSource(item.source); setTitle(item.title); setLearningPackage(item.package); setActiveId(item.id); setMode("reader"); };
+  const deleteItem = (id:string) => { const next=library.filter(item=>item.id!==id); setLibrary(next); localStorage.setItem("learnade-library",JSON.stringify(next)); };
+
   if (mode !== "home") {
-    return <StudyMode mode={mode} title={title} source={source} onBack={() => setMode("home")} />;
+    return <StudyMode mode={mode} title={title} source={source} learningPackage={learningPackage} learnadeId={activeId} onChangeMode={setMode} onBack={() => setMode("home")} />;
   }
 
   return (
@@ -64,7 +64,7 @@ export default function LearnadeApp() {
           <span className="brand-mark">L</span><span>Learnade</span>
         </button>
         <nav aria-label="Primary navigation">
-          <button className="nav-link active">My learning</button>
+          <button className="nav-link active" onClick={() => document.getElementById("library")?.scrollIntoView({behavior:"smooth"})}>My learning</button>
           <button className="nav-link" onClick={() => setShowUpload(true)}>New Learnade</button>
         </nav>
         <div className="profile"><span className="save-dot" /> {saved ? "Saved locally" : "Saving…"}<span className="avatar">HT</span></div>
@@ -107,7 +107,12 @@ export default function LearnadeApp() {
         </div>
       </section>
 
-      {showUpload && <UploadModal source={source} onClose={() => setShowUpload(false)} onCreate={(text, name) => { saveSource(text); setTitle(name || "My new Learnade"); setShowUpload(false); }} />}
+      <section className="library-section" id="library">
+        <div className="section-heading"><div><span className="eyebrow">SAVED ON THIS DEVICE</span><h2>My learning library</h2></div><p>Your documents and progress stay in this browser.</p></div>
+        {library.length === 0 ? <div className="library-empty"><strong>Your first Learnade will appear here.</strong><p>Upload a document or paste notes to create it.</p><button className="secondary" onClick={()=>setShowUpload(true)}>Create one now</button></div> : <div className="library-grid">{library.map(item=><article key={item.id}><button className="library-open" onClick={()=>openItem(item)}><span className="material-icon">L</span><span><small>{new Date(item.createdAt).toLocaleDateString()}</small><strong>{item.title}</strong><em>{item.package.sections.length} sections · {item.package.flashcards.length} cards</em></span></button><button className="delete-item" onClick={()=>deleteItem(item.id)} aria-label={`Delete ${item.title}`}>×</button></article>)}</div>}
+      </section>
+
+      {showUpload && <UploadModal source="" onClose={() => setShowUpload(false)} onCreate={(text, name) => { saveSource(text,name); setShowUpload(false); }} />}
     </main>
   );
 }
@@ -132,12 +137,8 @@ function UploadModal({ source, onClose, onCreate }: { source: string; onClose: (
   };
   const create = async () => {
     if (text.trim().length < 40) { setError("Add a little more study material before continuing."); return; }
-    setStatus("Creating your learning package…");
-    try {
-      const response = await fetch("/api/process", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ title:name || "My new Learnade", text }) });
-      if (response.ok) localStorage.setItem("learnade-package", JSON.stringify(await response.json()));
-      else setStatus("Source saved. AI generation will activate when the app service is connected.");
-    } catch { setStatus("Source saved locally. You can start studying now."); }
+    setStatus("Building your private learning package on this device…");
+    await new Promise((resolve)=>setTimeout(resolve,250));
     onCreate(text, name);
   };
   return <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="upload-title">
@@ -157,28 +158,28 @@ function UploadModal({ source, onClose, onCreate }: { source: string; onClose: (
   </div>;
 }
 
-function StudyMode({ mode, title, source, onBack }: { mode: Mode; title: string; source: string; onBack: () => void }) {
+function StudyMode({ mode, title, source, learningPackage, learnadeId, onChangeMode, onBack }: { mode: Mode; title: string; source: string; learningPackage:LearningPackage; learnadeId:string; onChangeMode:(mode:Mode)=>void; onBack: () => void }) {
   const label = modes.find(m => m.id === mode)?.title || "Study";
   return <main className="study-shell">
     <header className="study-topbar"><button className="brand" onClick={onBack}><span className="brand-mark">L</span>Learnade</button><div><small>BIOLOGY</small><strong>{title}</strong></div><button className="secondary" onClick={onBack}>Exit session</button></header>
     <div className="study-layout">
       <aside><button className="back-link" onClick={onBack}>← <span>All modes</span></button><span className="eyebrow">LEARNING MODE</span><h1>{label}</h1><p>Switch whenever your attention or energy changes.</p><div className="side-progress"><span>Session progress</span><strong>38%</strong><i><b /></i></div></aside>
       <section className="workspace">
-        {mode === "reader" && <Reader source={source} />}
+        {mode === "reader" && <Reader source={source} title={title} />}
         {mode === "speed" && <SpeedReader source={source} />}
-        {mode === "focus" && <FocusMode />}
-        {mode === "brainrot" && <Brainrot source={source} />}
-        {mode === "guide" && <Guide />}
-        {mode === "cards" && <Cards />}
-        {mode === "quiz" && <Quiz />}
+        {mode === "focus" && <FocusMode learningPackage={learningPackage} />}
+        {mode === "brainrot" && <Brainrot source={learningPackage.narration} />}
+        {mode === "guide" && <Guide learningPackage={learningPackage} onReview={()=>onChangeMode("reader")} />}
+        {mode === "cards" && <Cards cards={learningPackage.flashcards} learnadeId={learnadeId} />}
+        {mode === "quiz" && <Quiz questions={learningPackage.quiz} learnadeId={learnadeId} />}
       </section>
     </div>
   </main>;
 }
 
-function Reader({ source }: { source: string }) {
+function Reader({ source, title }: { source: string; title:string }) {
   const [dyslexia, setDyslexia] = useState(false); const [size, setSize] = useState(19); const [focus, setFocus] = useState(false);
-  return <div className="reader-panel"><div className="tool-row"><button className={dyslexia ? "tool active" : "tool"} onClick={() => setDyslexia(!dyslexia)} aria-pressed={dyslexia}>OpenDyslexic font</button><button className={focus ? "tool active" : "tool"} onClick={() => setFocus(!focus)} aria-pressed={focus}>Line focus</button><label>Text size <input type="range" min="16" max="28" value={size} onChange={e => setSize(+e.target.value)} /></label></div><article className={`${dyslexia ? "dyslexia" : ""} ${focus ? "line-focus" : ""}`} style={{fontSize: size}}><span className="eyebrow">SECTION 1 OF 4</span><h2>Photosynthesis: turning light into energy</h2>{source.split(/(?<=[.!?])\s+/).map((sentence, i) => <p key={i}>{sentence}</p>)}</article></div>;
+  return <div className="reader-panel"><div className="tool-row"><button className={dyslexia ? "tool active" : "tool"} onClick={() => setDyslexia(!dyslexia)} aria-pressed={dyslexia}>OpenDyslexic font</button><button className={focus ? "tool active" : "tool"} onClick={() => setFocus(!focus)} aria-pressed={focus}>Line focus</button><label>Text size <input type="range" min="16" max="28" value={size} onChange={e => setSize(+e.target.value)} /></label></div><article className={`${dyslexia ? "dyslexia" : ""} ${focus ? "line-focus" : ""}`} style={{fontSize: size}}><span className="eyebrow">SOURCE READER</span><h2>{title}</h2>{source.split(/(?<=[.!?])\s+/).map((sentence, i) => <p id={`source-sentence-${i+1}`} key={i}>{sentence}</p>)}</article></div>;
 }
 
 function SpeedReader({ source }: { source: string }) {
@@ -188,11 +189,12 @@ function SpeedReader({ source }: { source: string }) {
   return <div className="speed-panel"><span className="eyebrow">RAPID SERIAL VISUAL PRESENTATION</span><div className="speed-word">{word.slice(0,pivot)}<em>{word[pivot]}</em>{word.slice(pivot+1)}</div><div className="speed-line"><i style={{width: `${(index / words.length) * 100}%`}} /></div><div className="speed-controls"><button onClick={() => setIndex(Math.max(0,index-10))}>↶ 10</button><button className="play" onClick={() => setPlaying(!playing)} aria-label={playing ? "Pause speed reader" : "Play speed reader"}>{playing ? <PauseIcon /> : <PlayIcon />}</button><button onClick={() => setIndex(Math.min(words.length-1,index+10))}>10 ↷</button></div><label className="wpm">{wpm} words per minute<input type="range" min="100" max="700" step="25" value={wpm} onChange={e => setWpm(+e.target.value)} /></label><p className="calm-note">Start at a pace that feels comfortable. Comprehension matters more than speed.</p></div>;
 }
 
-function FocusMode() {
+function FocusMode({learningPackage}:{learningPackage:LearningPackage}) {
   const [seconds, setSeconds] = useState(12 * 60); const [running, setRunning] = useState(false); const [done, setDone] = useState<boolean[]>([false,false,false]);
   const [brokenDown, setBrokenDown] = useState(false);
   useEffect(() => { if (!running || seconds <= 0) return; const t = setInterval(() => setSeconds(s => s - 1), 1000); return () => clearInterval(t); }, [running, seconds]);
-  const tasks = brokenDown ? ["Read just the first paragraph", "Write down one idea in your own words", "Review 3 key terms"] : ["Read the section summary", "Review 6 key terms", "Answer 3 practice questions"];
+  const firstSection=learningPackage.sections[0]?.title || "the opening section";
+  const tasks = brokenDown ? [`Read the first paragraph about ${firstSection.toLowerCase()}`, "Write down one idea in your own words", `Review ${Math.min(3,learningPackage.keyTerms.length)} key terms`] : [`Read the summary of ${firstSection.toLowerCase()}`, `Review ${learningPackage.keyTerms.length} key terms`, `Answer ${learningPackage.quiz.length} practice questions`];
   const breakItDown = () => { setBrokenDown(true); setDone([false,false,false]); };
   return <div className="focus-panel"><span className="eyebrow">ONE SMALL STEP AT A TIME</span><h2>Your 12-minute focus session</h2><p>Everything else can wait. You only need to do the next thing.</p><div className="timer">{String(Math.floor(seconds/60)).padStart(2,"0")}<i>:</i>{String(seconds%60).padStart(2,"0")}</div><button className="primary focus-start" onClick={() => setRunning(!running)}>{running ? <><PauseIcon /> Pause gently</> : <><PlayIcon /> Start focus session</>}</button><div className="task-list" aria-live="polite">{tasks.map((task,i) => <button className={done[i] ? "done" : ""} key={task} onClick={() => setDone(d => d.map((v,j) => j === i ? !v : v))}><span>{done[i] ? "✓" : i+1}</span><strong>{task}</strong><small>{brokenDown ? [2,2,3][i] : [3,4,5][i]} min</small></button>)}</div>{brokenDown && <p className="microcopy" role="status">Done. We made the next step smaller and removed the pressure to finish everything at once.</p>}<button className="text-button" onClick={breakItDown} disabled={brokenDown}>{brokenDown ? "This is the smallest useful starting point" : "I’m stuck — help me make this smaller"}</button></div>;
 }
@@ -200,35 +202,38 @@ function FocusMode() {
 function Brainrot({ source }: { source: string }) {
   const [speaking, setSpeaking] = useState(false); const utterance = useRef<SpeechSynthesisUtterance | null>(null);
   const [visual, setVisual] = useState<"minecraft" | "subway">("minecraft");
-  const toggle = () => { if (speaking) { speechSynthesis.cancel(); setSpeaking(false); return; } const u = new SpeechSynthesisUtterance(source); u.rate = 1.05; u.onend = () => setSpeaking(false); utterance.current = u; speechSynthesis.speak(u); setSpeaking(true); };
+  const narrationSentences=useMemo(()=>source.split(/(?<=[.!?])\s+/).filter(Boolean),[source]);
+  const [sentenceIndex,setSentenceIndex]=useState(0); const [rate,setRate]=useState(1.05); const [voices,setVoices]=useState<SpeechSynthesisVoice[]>([]); const [voiceName,setVoiceName]=useState("");
+  useEffect(()=>{ const load=()=>{const available=speechSynthesis.getVoices();setVoices(available);if(!voiceName&&available[0])setVoiceName(available.find(v=>v.lang.startsWith("en"))?.name||available[0].name)};load();speechSynthesis.addEventListener("voiceschanged",load);return()=>speechSynthesis.removeEventListener("voiceschanged",load)},[voiceName]);
+  const speakFrom=(start:number)=>{ speechSynthesis.cancel(); const remaining=narrationSentences.slice(start);const spoken=remaining.join(" ");const offsets=remaining.map((_,i)=>remaining.slice(0,i).join(" ").length+(i?1:0)); const u=new SpeechSynthesisUtterance(spoken);u.rate=rate;u.voice=voices.find(v=>v.name===voiceName)||null;u.onboundary=(event)=>{let local=0;for(let i=0;i<offsets.length;i+=1)if(event.charIndex>=offsets[i])local=i;setSentenceIndex(Math.min(start+local,narrationSentences.length-1));};u.onend=()=>setSpeaking(false);utterance.current=u;speechSynthesis.speak(u);setSpeaking(true); };
+  const toggle = () => { if (speaking) { speechSynthesis.cancel(); setSpeaking(false); return; } speakFrom(sentenceIndex); };
+  const skip=(amount:number)=>{const next=Math.max(0,Math.min(narrationSentences.length-1,sentenceIndex+amount));setSentenceIndex(next);if(speaking)speakFrom(next)};
   useEffect(() => () => speechSynthesis.cancel(), []);
   const videoId = visual === "minecraft" ? "XBIaqOm0RKQ" : "QPW3XwBoQlw";
-  return <div className="brainrot-panel"><div className="visual-picker" aria-label="Choose background gameplay"><button className={visual==="minecraft"?"active":""} onClick={()=>setVisual("minecraft")}>Minecraft parkour</button><button className={visual==="subway"?"active":""} onClick={()=>setVisual("subway")}>Subway Surfers</button></div><div className="brain-visual"><iframe key={videoId} src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&mute=1&controls=0&loop=1&playlist=${videoId}&modestbranding=1&rel=0`} title={visual === "minecraft" ? "Minecraft parkour visual focus gameplay" : "Subway Surfers visual focus gameplay"} allow="autoplay; encrypted-media; picture-in-picture" referrerPolicy="strict-origin-when-cross-origin" /><div className="video-shade" /><div className="video-label">VISUAL FOCUS · {visual === "minecraft" ? "MINECRAFT PARKOUR" : "SUBWAY SURFERS"}</div></div><div className="caption"><span className="eyebrow">NOW EXPLAINING</span><p>{source.split(/(?<=[.!?])\s+/)[0]}</p></div><div className="brain-controls"><button className="play" onClick={toggle} aria-label={speaking ? "Pause narration" : "Play narration"}>{speaking ? <PauseIcon /> : <PlayIcon />}</button><span>{speaking ? "Narrating with captions" : "Ready to listen"}</span></div><p className="calm-note">Voice is generated on your device. {visual === "minecraft" ? <><a href="https://www.youtube.com/watch?v=XBIaqOm0RKQ" target="_blank" rel="noreferrer">Minecraft gameplay by GameplaysForFree</a>, licensed <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a>.</> : <><a href="https://www.youtube.com/watch?v=QPW3XwBoQlw" target="_blank" rel="noreferrer">Subway Surfers gameplay</a> is marked free to use by its creator.</>}</p></div>;
+  return <div className="brainrot-panel"><div className="visual-picker" aria-label="Choose background gameplay"><button className={visual==="minecraft"?"active":""} onClick={()=>setVisual("minecraft")}>Minecraft parkour</button><button className={visual==="subway"?"active":""} onClick={()=>setVisual("subway")}>Subway Surfers</button></div><div className="brain-visual"><iframe key={videoId} src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&mute=1&controls=0&loop=1&playlist=${videoId}&modestbranding=1&rel=0`} title={visual === "minecraft" ? "Minecraft parkour visual focus gameplay" : "Subway Surfers visual focus gameplay"} allow="autoplay; encrypted-media; picture-in-picture" referrerPolicy="strict-origin-when-cross-origin" /><div className="video-shade" /><div className="video-label">VISUAL FOCUS · {visual === "minecraft" ? "MINECRAFT PARKOUR" : "SUBWAY SURFERS"}</div></div><div className="caption" aria-live="polite"><span className="eyebrow">NOW EXPLAINING · {sentenceIndex+1} OF {narrationSentences.length}</span><p>{narrationSentences[sentenceIndex]}</p></div><div className="brain-controls"><button onClick={()=>skip(-1)} aria-label="Previous narration segment">←</button><button className="play" onClick={toggle} aria-label={speaking ? "Pause narration" : "Play narration"}>{speaking ? <PauseIcon /> : <PlayIcon />}</button><button onClick={()=>skip(1)} aria-label="Next narration segment">→</button><span>{speaking ? "Narrating with captions" : "Ready to listen"}</span></div><div className="voice-controls"><label>Voice<select value={voiceName} onChange={e=>setVoiceName(e.target.value)}>{voices.filter(v=>v.lang.startsWith("en")).map(v=><option key={v.name} value={v.name}>{v.name}</option>)}</select></label><label>Speed<select value={rate} onChange={e=>setRate(Number(e.target.value))}><option value={0.8}>0.8×</option><option value={1.05}>1×</option><option value={1.25}>1.25×</option><option value={1.5}>1.5×</option></select></label></div><p className="calm-note">Voice is generated on your device. {visual === "minecraft" ? <><a href="https://www.youtube.com/watch?v=XBIaqOm0RKQ" target="_blank" rel="noreferrer">Minecraft gameplay by GameplaysForFree</a>, licensed <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a>.</> : <><a href="https://www.youtube.com/watch?v=QPW3XwBoQlw" target="_blank" rel="noreferrer">Subway Surfers gameplay</a> is marked free to use by its creator.</>}</p></div>;
 }
 
-const guideItems = [
-  { n:"01", title:"Learning objectives", summary:"Know what you should be able to explain after this lesson.", detail:<ul><li>Explain how light becomes stored chemical energy.</li><li>Compare light-dependent reactions and the Calvin cycle.</li><li>Identify factors that change the reaction rate.</li></ul> },
-  { n:"02", title:"Key relationship", summary:"See how the two stages depend on each other.", detail:<p>Light reactions make <strong>ATP + NADPH</strong>, which power the <strong>Calvin cycle</strong> to build glucose.</p> },
-  { n:"03", title:"Likely test material", summary:"Prioritize the details most likely to be assessed.", detail:<p>Know the inputs, outputs, location, and relationship between the two major stages.</p> },
-  { n:"04", title:"Common mix-up", summary:"Catch the misconception students make most often.", detail:<p>The oxygen released by plants comes from splitting water—not from carbon dioxide.</p> },
-];
-function Guide() { const [open,setOpen]=useState<string | null>("01"); return <div className="guide"><span className="eyebrow">AI-GENERATED STUDY GUIDE</span><h2>Photosynthesis at a glance</h2><p className="guide-intro">Select a section to expand it. These will be generated from each uploaded source.</p><div className="guide-grid">{guideItems.map(item => <section className={open===item.n ? "open" : ""} key={item.n}><button onClick={() => setOpen(open===item.n ? null : item.n)} aria-expanded={open===item.n}><span>{item.n}</span><h3>{item.title}</h3><p>{item.summary}</p><b>{open===item.n ? "−" : "+"}</b></button>{open===item.n && <div className="guide-detail">{item.detail}<button className="source-link">Review in source →</button></div>}</section>)}</div></div>; }
+function Guide({learningPackage,onReview}:{learningPackage:LearningPackage;onReview:()=>void}) { const [open,setOpen]=useState<string | null>(learningPackage.sections[0]?.id||null); return <div className="guide"><span className="eyebrow">SOURCE-BUILT STUDY GUIDE</span><h2>{learningPackage.title} at a glance</h2><p className="guide-intro">Built privately on this device. Select a section to expand it and trace every point back to the source.</p><div className="overview-box"><strong>Overview</strong><p>{learningPackage.overview}</p></div><div className="guide-grid">{learningPackage.sections.map((item,index) => <section className={open===item.id ? "open" : ""} key={item.id}><button onClick={() => setOpen(open===item.id ? null : item.id)} aria-expanded={open===item.id}><span>{String(index+1).padStart(2,"0")}</span><h3>{item.title}</h3><p>{item.sentences[0]}</p><b>{open===item.id ? "−" : "+"}</b></button>{open===item.id && <div className="guide-detail"><p>{item.text}</p><button className="source-link" onClick={onReview}>Review in source →</button></div>}</section>)}</div><div className="key-term-list"><span className="eyebrow">KEY TERMS FROM YOUR SOURCE</span>{learningPackage.keyTerms.map(term=><article key={term.term}><strong>{term.term}</strong><p>{term.definition}</p></article>)}</div></div>; }
 
-function Cards() {
+function Cards({cards,learnadeId}:{cards:LearningPackage["flashcards"];learnadeId:string}) {
+  const storageKey=`learnade-cards-${learnadeId}`;
   const [queue,setQueue]=useState<number[]>(cards.map((_,i)=>i)); const [known,setKnown]=useState<number[]>([]); const [flip,setFlip]=useState(false); const [status,setStatus]=useState("");
+  useEffect(()=>{try{const saved=JSON.parse(localStorage.getItem(storageKey)||"null");if(saved){setQueue(saved.queue);setKnown(saved.known)}}catch{}},[storageKey]);
+  useEffect(()=>{localStorage.setItem(storageKey,JSON.stringify({queue,known}))},[queue,known,storageKey]);
   const current = queue[0];
   const notYet = () => { setQueue(q => q.length > 1 ? [...q.slice(1), q[0]] : q); setFlip(false); setStatus("Card moved to the end of your review stack."); };
   const gotIt = () => { if (current === undefined) return; setKnown(k => [...k,current]); setQueue(q => q.slice(1)); setFlip(false); setStatus("Card added to your known stack."); };
   const reviewKnown = () => { setQueue(known); setKnown([]); setFlip(false); setStatus("Known cards moved back into review."); };
   if (current === undefined) return <div className="cards-panel card-complete"><span className="completion-mark">✓</span><h2>You know this set.</h2><p>All {known.length} cards are in your known stack.</p><button className="primary" onClick={reviewKnown}>Review known cards again</button></div>;
-  return <div className="cards-panel"><div className="stack-status"><span>To review <strong>{queue.length}</strong></span><span>Known <strong>{known.length}</strong></span></div><span className="eyebrow">CURRENT REVIEW CARD</span><button className={`flashcard ${flip ? "flipped" : ""}`} onClick={() => setFlip(!flip)}><small>{flip ? "ANSWER" : "QUESTION"}</small><strong>{cards[current][flip ? 1 : 0]}</strong><span>Click to {flip ? "see question" : "reveal answer"}</span></button><div className="card-actions"><button onClick={notYet}>↻ Not yet</button><button className="primary" onClick={gotIt}>Got it ✓</button></div><p className="microcopy" aria-live="polite">{status}</p></div>;
+  return <div className="cards-panel"><div className="stack-status"><span>To review <strong>{queue.length}</strong></span><span>Known <strong>{known.length}</strong></span></div><span className="eyebrow">CURRENT REVIEW CARD</span><button className={`flashcard ${flip ? "flipped" : ""}`} onClick={() => setFlip(!flip)}><small>{flip ? "ANSWER" : "QUESTION"}</small><strong>{flip?cards[current].back:cards[current].front}</strong><span>Click to {flip ? "see question" : "reveal answer"}</span></button><div className="card-actions"><button onClick={notYet}>↻ Not yet</button><button className="primary" onClick={gotIt}>Got it ✓</button></div><p className="microcopy" aria-live="polite">{status}</p></div>;
 }
 
-function Quiz() {
-  const [index,setIndex]=useState(0); const [selected,setSelected]=useState<number | null>(null); const [score,setScore]=useState(0); const [complete,setComplete]=useState(false); const question=quizQuestions[index];
+function Quiz({questions,learnadeId}:{questions:LearningPackage["quiz"];learnadeId:string}) {
+  const [index,setIndex]=useState(0); const [selected,setSelected]=useState<number | null>(null); const [score,setScore]=useState(0); const [complete,setComplete]=useState(false); const question=questions[index];
   const choose=(choice:number)=>{ if(selected!==null)return; setSelected(choice); if(choice===question.answer)setScore(s=>s+1); };
-  const next=()=>{ if(index===quizQuestions.length-1){setComplete(true);return;} setIndex(i=>i+1);setSelected(null); };
+  const next=()=>{ if(index===questions.length-1){setComplete(true);localStorage.setItem(`learnade-quiz-${learnadeId}`,JSON.stringify({score,total:questions.length,date:new Date().toISOString()}));return;} setIndex(i=>i+1);setSelected(null); };
   const restart=()=>{setIndex(0);setSelected(null);setScore(0);setComplete(false);};
-  if(complete)return <div className="quiz-panel quiz-results"><span className="completion-mark">{score>=4?"✓":"↻"}</span><span className="eyebrow">QUIZ COMPLETE</span><h2>{score} out of {quizQuestions.length}</h2><p>{score>=4?"Strong work. You have a solid grasp of the material.":"Good start. Another pass will strengthen the concepts that are still forming."}</p><button className="primary" onClick={restart}>Try the quiz again</button></div>;
-  return <div className="quiz-panel"><div className="quiz-progress"><i style={{width:`${((index+1)/quizQuestions.length)*100}%`}} /></div><span className="eyebrow">QUESTION {index+1} OF {quizQuestions.length} · FOUNDATIONS</span><h2>{question.prompt}</h2>{question.options.map((v,i) => <button disabled={selected!==null} className={`answer ${selected!==null&&i===question.answer?"correct":""} ${selected===i&&i!==question.answer?"incorrect":""}`} key={v} onClick={() => choose(i)}><span>{String.fromCharCode(65+i)}</span>{v}</button>)}{selected!==null && <div className="feedback"><strong>{selected===question.answer?"Exactly right.":"Not quite—here’s the connection."}</strong><p>{question.explanation}</p><button className="primary" onClick={next}>{index===quizQuestions.length-1?"See my results":"Next question →"}</button></div>}</div>;
+  if(!question)return <div className="quiz-panel quiz-results"><span className="completion-mark">!</span><h2>Not enough source material yet.</h2><p>Add more text to generate practice questions.</p></div>;
+  if(complete)return <div className="quiz-panel quiz-results"><span className="completion-mark">{score>=Math.ceil(questions.length*.8)?"✓":"↻"}</span><span className="eyebrow">QUIZ COMPLETE</span><h2>{score} out of {questions.length}</h2><p>{score>=Math.ceil(questions.length*.8)?"Strong work. You have a solid grasp of the material.":"Good start. Another pass will strengthen the concepts that are still forming."}</p><button className="primary" onClick={restart}>Try the quiz again</button></div>;
+  return <div className="quiz-panel"><div className="quiz-progress"><i style={{width:`${((index+1)/questions.length)*100}%`}} /></div><span className="eyebrow">QUESTION {index+1} OF {questions.length} · FROM YOUR SOURCE</span><h2>{question.prompt}</h2>{question.options.map((v,i) => <button disabled={selected!==null} className={`answer ${selected!==null&&i===question.answer?"correct":""} ${selected===i&&i!==question.answer?"incorrect":""}`} key={v} onClick={() => choose(i)}><span>{String.fromCharCode(65+i)}</span>{v}</button>)}{selected!==null && <div className="feedback"><strong>{selected===question.answer?"Exactly right.":"Not quite—here’s the connection."}</strong><p>{question.explanation}</p><button className="primary" onClick={next}>{index===questions.length-1?"See my results":"Next question →"}</button></div>}</div>;
 }
