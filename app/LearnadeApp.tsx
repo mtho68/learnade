@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import "@fontsource/opendyslexic/400.css";
+import { extractDocument } from "../lib/extractDocument";
 
 type Mode = "home" | "reader" | "speed" | "focus" | "brainrot" | "guide" | "cards" | "quiz";
 
@@ -115,18 +116,43 @@ function UploadModal({ source, onClose, onCreate }: { source: string; onClose: (
   const [text, setText] = useState(source);
   const [name, setName] = useState("");
   const [fileName, setFileName] = useState("");
+  const [extracting, setExtracting] = useState(false);
+  const [error, setError] = useState("");
+  const [status, setStatus] = useState("");
+  const selectFile = async (file?: File) => {
+    if (!file) return;
+    setFileName(file.name); setExtracting(true); setError(""); setStatus("Reading your material…");
+    try {
+      const result = await extractDocument(file);
+      setText(result.text); setName((current) => current || result.title);
+      setStatus(`${result.kind.toUpperCase()} ready · ${result.text.split(/\s+/).length.toLocaleString()} words extracted`);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "We couldn’t read that file."); setStatus("");
+    } finally { setExtracting(false); }
+  };
+  const create = async () => {
+    if (text.trim().length < 40) { setError("Add a little more study material before continuing."); return; }
+    setStatus("Creating your learning package…");
+    try {
+      const response = await fetch("/api/process", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ title:name || "My new Learnade", text }) });
+      if (response.ok) localStorage.setItem("learnade-package", JSON.stringify(await response.json()));
+      else setStatus("Source saved. AI generation will activate when the app service is connected.");
+    } catch { setStatus("Source saved locally. You can start studying now."); }
+    onCreate(text, name);
+  };
   return <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="upload-title">
     <div className="modal">
       <button className="modal-close" onClick={onClose} aria-label="Close">×</button>
       <span className="eyebrow">NEW LEARNADE</span><h2 id="upload-title">What are we learning?</h2><p>Upload source material or paste your notes. Your work stays on this device.</p>
       <label className="dropzone">
-        <input type="file" accept=".pdf,.docx,.pptx,.txt" onChange={e => setFileName(e.target.files?.[0]?.name || "")} />
-        <span className="upload-bubble">↑</span><strong>{fileName || "Drop a PDF, DOCX, or PPTX"}</strong><small>{fileName ? "File ready for extraction" : "or click to choose a file"}</small>
+        <input type="file" accept=".pdf,.docx,.pptx,.txt" onChange={e => selectFile(e.target.files?.[0])} />
+        <span className="upload-bubble">↑</span><strong>{extracting ? "Extracting readable text…" : fileName || "Drop a PDF, DOCX, or PPTX"}</strong><small>{status || "or click to choose a file"}</small>
       </label>
       <div className="or"><span>or paste text</span></div>
       <label className="field"><span>Material title</span><input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Week 4: Cellular respiration" /></label>
       <label className="field"><span>Study material</span><textarea value={text} onChange={e => setText(e.target.value)} rows={7} /></label>
-      <div className="modal-actions"><button className="secondary" onClick={onClose}>Cancel</button><button className="primary" onClick={() => onCreate(text, name)}>Create my Learnade →</button></div>
+      {error && <p className="form-error" role="alert">{error}</p>}
+      <div className="modal-actions"><button className="secondary" onClick={onClose}>Cancel</button><button className="primary" disabled={extracting} onClick={create}>{extracting ? "Reading file…" : "Create my Learnade →"}</button></div>
     </div>
   </div>;
 }
@@ -173,9 +199,11 @@ function FocusMode() {
 
 function Brainrot({ source }: { source: string }) {
   const [speaking, setSpeaking] = useState(false); const utterance = useRef<SpeechSynthesisUtterance | null>(null);
+  const [visual, setVisual] = useState<"minecraft" | "subway">("minecraft");
   const toggle = () => { if (speaking) { speechSynthesis.cancel(); setSpeaking(false); return; } const u = new SpeechSynthesisUtterance(source); u.rate = 1.05; u.onend = () => setSpeaking(false); utterance.current = u; speechSynthesis.speak(u); setSpeaking(true); };
   useEffect(() => () => speechSynthesis.cancel(), []);
-  return <div className="brainrot-panel"><div className="brain-visual"><video autoPlay muted loop playsInline preload="metadata" aria-label="Urban parkour footage used as a visual focus aid"><source src="https://videos.pexels.com/video-files/30511322/13071752_1080_1920_30fps.mp4" type="video/mp4" /></video><div className="video-shade" /><div className="video-label">VISUAL FOCUS · PARKOUR</div></div><div className="caption"><span className="eyebrow">NOW EXPLAINING</span><p>{source.split(/(?<=[.!?])\s+/)[0]}</p></div><div className="brain-controls"><button className="play" onClick={toggle} aria-label={speaking ? "Pause narration" : "Play narration"}>{speaking ? <PauseIcon /> : <PlayIcon />}</button><span>{speaking ? "Narrating with captions" : "Ready to listen"}</span></div><p className="calm-note">Voice is generated on your device. Parkour footage by Alejandro De Roa via Pexels.</p></div>;
+  const videoId = visual === "minecraft" ? "XBIaqOm0RKQ" : "QPW3XwBoQlw";
+  return <div className="brainrot-panel"><div className="visual-picker" aria-label="Choose background gameplay"><button className={visual==="minecraft"?"active":""} onClick={()=>setVisual("minecraft")}>Minecraft parkour</button><button className={visual==="subway"?"active":""} onClick={()=>setVisual("subway")}>Subway Surfers</button></div><div className="brain-visual"><iframe key={videoId} src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&mute=1&controls=0&loop=1&playlist=${videoId}&modestbranding=1&rel=0`} title={visual === "minecraft" ? "Minecraft parkour visual focus gameplay" : "Subway Surfers visual focus gameplay"} allow="autoplay; encrypted-media; picture-in-picture" referrerPolicy="strict-origin-when-cross-origin" /><div className="video-shade" /><div className="video-label">VISUAL FOCUS · {visual === "minecraft" ? "MINECRAFT PARKOUR" : "SUBWAY SURFERS"}</div></div><div className="caption"><span className="eyebrow">NOW EXPLAINING</span><p>{source.split(/(?<=[.!?])\s+/)[0]}</p></div><div className="brain-controls"><button className="play" onClick={toggle} aria-label={speaking ? "Pause narration" : "Play narration"}>{speaking ? <PauseIcon /> : <PlayIcon />}</button><span>{speaking ? "Narrating with captions" : "Ready to listen"}</span></div><p className="calm-note">Voice is generated on your device. {visual === "minecraft" ? <><a href="https://www.youtube.com/watch?v=XBIaqOm0RKQ" target="_blank" rel="noreferrer">Minecraft gameplay by GameplaysForFree</a>, licensed <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a>.</> : <><a href="https://www.youtube.com/watch?v=QPW3XwBoQlw" target="_blank" rel="noreferrer">Subway Surfers gameplay</a> is marked free to use by its creator.</>}</p></div>;
 }
 
 const guideItems = [
