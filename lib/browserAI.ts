@@ -41,7 +41,11 @@ export async function generateWithBrowserAI(textSource:string,title:string,onPro
   const raw=isRecord(last)?last.content:last;
   const ai=extractJson(text(raw));
   const base=generateLocalLearningPackage(textSource,title);
-  const sourceSection=(...values:unknown[])=>{const haystack=values.map(String).join(" ").toLowerCase();return base.sections.find(section=>section.title.toLowerCase().split(/\s+/).some(word=>word.length>4&&haystack.includes(word)))||base.sections.find(section=>section.text.toLowerCase().split(/\s+/).some(word=>word.length>5&&haystack.includes(word)))||base.sections[0]};
+  const sourceSection=(...values:unknown[])=>{
+    const tokens=new Set(values.map(String).join(" ").toLowerCase().match(/[a-z][a-z-]{4,}/g)||[]);
+    const ranked=base.sections.map(section=>({section,score:[...tokens].filter(token=>section.text.toLowerCase().includes(token)).length})).sort((a,b)=>b.score-a.score);
+    return ranked[0]?.score>=2?ranked[0].section:undefined;
+  };
   const terms=records(ai.keyTerms).filter(value=>text(value.term)&&text(value.definition)).slice(0,10);
   const cards=records(ai.flashcards).filter(value=>text(value.front)&&text(value.back)).slice(0,10);
   const quiz=records(ai.quiz).filter(value=>Array.isArray(value.options)&&value.options.length===4&&value.options.every(option=>typeof option==="string")&&Number.isInteger(value.answer)&&Number(value.answer)>=0&&Number(value.answer)<4&&text(value.prompt)).slice(0,8);
@@ -49,9 +53,9 @@ export async function generateWithBrowserAI(textSource:string,title:string,onPro
   return {...base,
     overview:text(ai.overview)||base.overview,
     objectives:objectives.length?objectives:base.objectives,
-    keyTerms:terms.length?terms.map((value,index)=>({term:text(value.term)||`Term ${index+1}`,definition:text(value.definition),sourceSection:sourceSection(value.term,value.definition).id})):base.keyTerms,
-    flashcards:cards.length?cards.map((value,index)=>({id:`ai-card-${index+1}`,front:text(value.front),back:text(value.back),sourceSection:sourceSection(value.front,value.back).id})):base.flashcards,
-    quiz:quiz.length?quiz.map((value,index)=>({id:`ai-quiz-${index+1}`,prompt:text(value.prompt),options:(value.options as string[]).map(String),answer:Number(value.answer),explanation:text(value.explanation)||"Review the matching source section.",sourceSection:sourceSection(value.prompt,value.explanation).id})):base.quiz,
+    keyTerms:terms.length?terms.map((value,index)=>{const section=sourceSection(value.term,value.definition);return section?{term:text(value.term)||`Term ${index+1}`,definition:text(value.definition),sourceSection:section.id}:base.keyTerms[index%base.keyTerms.length]}):base.keyTerms,
+    flashcards:cards.length?cards.map((value,index)=>{const section=sourceSection(value.front,value.back);return section?{id:`ai-card-${index+1}`,front:text(value.front),back:text(value.back),sourceSection:section.id}:base.flashcards[index%base.flashcards.length]}):base.flashcards,
+    quiz:quiz.length?quiz.map((value,index)=>{const section=sourceSection(value.prompt,value.explanation);return section?{id:`ai-quiz-${index+1}`,prompt:text(value.prompt),options:(value.options as string[]).map(String),answer:Number(value.answer),explanation:text(value.explanation)||"Review the matching source section.",sourceSection:section.id}:base.quiz[index%base.quiz.length]}):base.quiz,
     narration:text(ai.narration)||base.narration,
   };
 }

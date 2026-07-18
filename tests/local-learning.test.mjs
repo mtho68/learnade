@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { generateLocalLearningPackage } from "../lib/localLearning.ts";
+import { masteryPercent, recordAnswer, scheduleCard } from "../lib/mastery.ts";
 
 test("preserves short source facts instead of silently dropping them",()=>{
   const source="ATP matters. It stores energy. Cells use ATP during work.";
@@ -29,4 +30,23 @@ test("creates quiz prompts with one defensible answer",()=>{
       if(index!==question.answer)assert.ok(!quoted.includes(option.toLowerCase()),`quoted statement contains distractor: ${option}`);
     });
   }
+});
+
+test("schedules successful cards farther apart and failed cards immediately",()=>{
+  const now=new Date("2026-07-18T00:00:00.000Z");
+  const first=scheduleCard(undefined,"known",now);
+  const second=scheduleCard(first,"known",now);
+  const missed=scheduleCard(second,"again",now);
+  assert.equal(first.intervalDays,1);
+  assert.equal(second.intervalDays,3);
+  assert.equal(missed.intervalDays,0);
+  assert.equal(missed.dueAt,now.toISOString());
+});
+
+test("records concept-level mastery without losing other sections",()=>{
+  let state=recordAnswer({},"section-1",true);
+  state=recordAnswer(state,"section-1",false);
+  state=recordAnswer(state,"section-2",true);
+  assert.deepEqual(state["section-1"],{correct:1,attempts:2});
+  assert.equal(masteryPercent(state,["section-1","section-2"]),75);
 });
