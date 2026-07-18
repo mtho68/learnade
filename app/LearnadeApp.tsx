@@ -102,8 +102,8 @@ export default function LearnadeApp() {
         <div className="section-heading"><div><span className="eyebrow">CHOOSE WHAT WORKS NOW</span><h2>How do you want to learn?</h2></div><p>You can switch modes anytime. No setup, no penalty.</p></div>
         <div className="mode-grid">
           {modes.map((item, index) => (
-            <button className={`mode-card mode-${index + 1}`} key={item.id} onClick={() => setMode(item.id)}>
-              <span className="mode-icon">{item.icon}</span><span><strong>{item.title}</strong><small>{item.text}</small></span><b>↗</b>
+            <button className={`mode-card mode-${index + 1}`} key={item.id} aria-label={item.title} onClick={() => setMode(item.id)}>
+              <span className="mode-icon" aria-hidden="true">{item.icon}</span><span><strong>{item.title}</strong><small>{item.text}</small></span><b aria-hidden="true">↗</b>
             </button>
           ))}
         </div>

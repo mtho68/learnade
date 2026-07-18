@@ -15,6 +15,7 @@ export type LearningPackage = {
 const STOP = new Set("about after again against also among because been before being between both could does doing down during each from further have having here into itself just more most other over same should some such than that their them then there these they this those through under very what when where which while will with would your notes lecture chapter section page slide using used uses into onto only much many were was are has had its our out how why who can may might must and but for not you the she him her his ours theirs".split(" "));
 const sentences = (text: string) => text.replace(/\s+/g, " ").split(/(?<=[.!?])\s+/).map((s) => s.trim()).filter(Boolean);
 const short = (value: string, length = 150) => value.length <= length ? value : `${value.slice(0, length).replace(/\s+\S*$/, "")}…`;
+const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const heading = (sentence: string, index: number) => {
   const words = sentence.replace(/[^\w\s-]/g, "").split(/\s+/).filter((word) => word.length > 3 && !STOP.has(word.toLowerCase())).slice(0, 5);
   return words.length ? words.join(" ").replace(/^./, (c) => c.toUpperCase()) : `Key concept ${index + 1}`;
@@ -46,12 +47,18 @@ export function generateLocalLearningPackage(text: string, title: string): Learn
   });
   const flashcards = keyTerms.map((item, index) => ({ id:`card-${index+1}`, front:`What does the source explain about “${item.term}”?`, back:item.definition, sourceSection:item.sourceSection }));
   const quiz = keyTerms.slice(0, 5).map((item, index) => {
-    const distractors = keyTerms.filter((other) => other.term !== item.term).slice(index, index + 3).map((other) => other.term);
+    const answerPattern = new RegExp(`\\b${escapeRegex(item.term)}(?:s|es)?\\b`, "gi");
+    const maskedStatement = short(item.definition, 140).replace(answerPattern, "___");
+    const maskedLower = maskedStatement.toLowerCase();
+    const distractors = keyTerms
+      .filter((other) => other.term !== item.term && !maskedLower.includes(other.term.toLowerCase()))
+      .slice(index, index + 3)
+      .map((other) => other.term);
     while (distractors.length < 3) distractors.push(["A related example", "A separate process", "An unsupported claim"][distractors.length]);
     const options = [item.term, ...distractors].slice(0,4);
     const rotate = index % options.length;
     const ordered = [...options.slice(rotate), ...options.slice(0,rotate)];
-    return { id:`quiz-${index+1}`, prompt:`Which key term is best supported by this source statement?\n“${short(item.definition, 140)}”`, options:ordered, answer:ordered.indexOf(item.term), explanation:item.definition, sourceSection:item.sourceSection };
+    return { id:`quiz-${index+1}`, prompt:`Which key term completes this source statement?\n“${maskedStatement}”`, options:ordered, answer:ordered.indexOf(item.term), explanation:item.definition, sourceSection:item.sourceSection };
   });
   return {
     title,

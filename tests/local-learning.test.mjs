@@ -17,3 +17,16 @@ test("creates usable no-AI cards and quiz questions grounded in sections",()=>{
   assert.ok(result.flashcards.every(card=>card.front&&card.back&&sectionIds.has(card.sourceSection)));
   assert.ok(result.quiz.every(question=>question.options.length===4&&question.answer>=0&&question.answer<4&&sectionIds.has(question.sourceSection)));
 });
+
+test("creates quiz prompts with one defensible answer",()=>{
+  const source="Photosynthesis converts light energy into chemical energy. Chlorophyll absorbs sunlight in chloroplasts. ATP stores energy for the Calvin cycle. The Calvin cycle uses carbon dioxide to build glucose. Water splitting releases oxygen.";
+  const result=generateLocalLearningPackage(source,"Photosynthesis");
+  for(const question of result.quiz){
+    const correct=question.options[question.answer].toLowerCase();
+    const quoted=question.prompt.match(/“([^”]+)”/)?.[1]?.toLowerCase()||"";
+    assert.ok(!question.prompt.toLowerCase().includes(correct),`prompt leaked correct answer: ${correct}`);
+    question.options.forEach((option,index)=>{
+      if(index!==question.answer)assert.ok(!quoted.includes(option.toLowerCase()),`quoted statement contains distractor: ${option}`);
+    });
+  }
+});
