@@ -96,3 +96,25 @@ nav { display:flex; gap:28px; }
 [data-theme="dark"] .guide-grid p,[data-theme="dark"] .guide-grid li { color:#c1ccc3; }[data-theme="dark"] .source-link,[data-theme="dark"] .text-button { color:#a8d5b3; }[data-theme="dark"] .line-focus p:focus,[data-theme="dark"] .line-focus p:hover { color:#17231e; }
 [data-theme="dark"] .caption { background:#0d1510; color:#fff; }[data-theme="dark"] .brand-mark,[data-theme="dark"] .material-icon { color:#17231e; }[data-theme="dark"] .focus-start .pause-icon i { background:#152019; }[data-theme="dark"] .modal-close,[data-theme="dark"] .delete-item { background:#2b3930; }[data-theme="dark"] .visual-picker { background:#202a24; }[data-theme="dark"] .visual-picker button.active { background:#35443a; color:#fff; }
 @media (max-width:620px) { .topbar { justify-content:space-between; }.theme-toggle>span:last-child { display:none; }.study-actions { gap:6px; }.study-actions .secondary { padding:0 12px; } }
+@media (max-width:620px) {
+  .topbar,.study-topbar { padding-inline:16px; }
+  .study-topbar .brand-name { display:none; }
+  .study-topbar .brand { flex:0 0 34px; }
+  .study-actions .secondary { min-height:42px; font-size:13px; }
+  .visual-picker { width:100%; display:grid; grid-template-columns:1fr 1fr; }
+  .visual-picker button { width:100%; padding-inline:8px; }
+  .visual-picker button:nth-child(3) { grid-column:1/-1; }
+  .brain-visual { height:clamp(300px,105vw,390px); border-radius:20px; }
+  .flashcard { height:auto; min-height:310px; padding:30px 22px; }
+  .flashcard strong { max-width:100%; margin:22px 0; font-size:clamp(22px,7vw,30px); overflow-wrap:anywhere; }
+  .speed-word { height:150px; font-size:clamp(42px,14vw,60px); overflow-wrap:anywhere; }
+  .card-actions { flex-wrap:wrap; }
+  .answer { flex-wrap:wrap; }
+  .answer-state { width:auto; margin-left:auto; }
+}
+@media (max-width:360px) {
+  .topbar .brand>span:last-child { display:none; }
+  .tool-row { gap:6px; padding-inline:12px; }
+  .tool { padding-inline:10px; }
+  .study-actions .secondary { padding-inline:9px; }
+}

@@ -178,7 +178,7 @@ function StudyMode({ mode, theme, onToggleTheme, title, source, learningPackage,
   const label = modes.find(m => m.id === mode)?.title || "Study";
   const [readerTarget,setReaderTarget]=useState<string|null>(null);
   return <main className="study-shell" data-theme={theme}>
-    <header className="study-topbar"><button className="brand" onClick={onBack}><span className="brand-mark">L</span>Learnade</button><div><small>STUDY MATERIAL</small><strong>{title}</strong></div><span className="study-actions"><ThemeToggle theme={theme} onToggle={onToggleTheme}/><button className="secondary" onClick={onBack}>Exit session</button></span></header>
+    <header className="study-topbar"><button className="brand" onClick={onBack}><span className="brand-mark">L</span><span className="brand-name">Learnade</span></button><div><small>STUDY MATERIAL</small><strong>{title}</strong></div><span className="study-actions"><ThemeToggle theme={theme} onToggle={onToggleTheme}/><button className="secondary" onClick={onBack}>Exit session</button></span></header>
     <div className="study-layout">
       <aside><button className="back-link" onClick={onBack}>← <span>All modes</span></button><span className="eyebrow">LEARNING MODE</span><h1>{label}</h1><p>Switch whenever your attention or energy changes.</p><div className="side-progress"><span>Ready to study</span><strong>{learningPackage.sections.length}</strong><span>source sections</span></div></aside>
       <section className="workspace">
