@@ -8,6 +8,7 @@ import { generateWithBrowserAI } from "../lib/browserAI";
 import { deleteLibraryItem, loadLibrary, saveLibraryItem } from "../lib/storage";
 
 type Mode = "home" | "reader" | "speed" | "focus" | "brainrot" | "guide" | "cards" | "quiz";
+type Theme = "light" | "dark";
 
 const sampleText = `Photosynthesis is the process plants use to convert light energy into chemical energy. It occurs primarily in chloroplasts. During the light-dependent reactions, chlorophyll absorbs sunlight and helps produce ATP and NADPH. The Calvin cycle then uses that stored energy to convert carbon dioxide into glucose. Water is split during the light-dependent reactions, releasing oxygen as a byproduct. Temperature, light intensity, and carbon dioxide concentration can all affect the rate of photosynthesis.`;
 
@@ -15,6 +16,7 @@ type SavedLearnade = { id:string; title:string; source:string; createdAt:string;
 
 function PlayIcon() { return <span className="media-icon play-icon" aria-hidden="true" />; }
 function PauseIcon() { return <span className="media-icon pause-icon" aria-hidden="true"><i /><i /></span>; }
+function ThemeToggle({theme,onToggle}:{theme:Theme;onToggle:()=>void}) { return <button className="theme-toggle" onClick={onToggle} aria-label={`Switch to ${theme==="light"?"dark":"light"} mode`} aria-pressed={theme==="dark"}><span aria-hidden="true">{theme==="light"?"☾":"☀"}</span><span>{theme==="light"?"Dark":"Light"}</span></button>; }
 
 const modes = [
   { id: "reader", icon: "Aa", title: "Accessible Reader", text: "Tune type, spacing, color, and focus to fit your eyes." },
@@ -35,6 +37,10 @@ export default function LearnadeApp() {
   const [activeId, setActiveId] = useState("demo");
   const [showUpload, setShowUpload] = useState(false);
   const [saved, setSaved] = useState(true);
+  const [theme,setTheme]=useState<Theme>("light");
+
+  useEffect(()=>{const timer=setTimeout(()=>{const stored=localStorage.getItem("learnade-theme");setTheme(stored==="dark"||(!stored&&window.matchMedia("(prefers-color-scheme: dark)").matches)?"dark":"light")},0);return()=>clearTimeout(timer)},[]);
+  const toggleTheme=()=>setTheme(current=>{const next=current==="light"?"dark":"light";localStorage.setItem("learnade-theme",next);return next});
 
   useEffect(() => {
     loadLibrary<SavedLearnade>().then(async parsed => {
@@ -56,11 +62,11 @@ export default function LearnadeApp() {
   const deleteItem = (id:string) => { if(!confirm("Delete this Learnade and its saved material?")) return; setLibrary(items=>items.filter(item=>item.id!==id)); void deleteLibraryItem(id); };
 
   if (mode !== "home") {
-    return <StudyMode mode={mode} title={title} source={source} learningPackage={learningPackage} learnadeId={activeId} onChangeMode={setMode} onBack={() => setMode("home")} />;
+    return <StudyMode mode={mode} theme={theme} onToggleTheme={toggleTheme} title={title} source={source} learningPackage={learningPackage} learnadeId={activeId} onChangeMode={setMode} onBack={() => setMode("home")} />;
   }
 
   return (
-    <main className="app-shell">
+    <main className="app-shell" data-theme={theme}>
       <header className="topbar">
         <button className="brand" onClick={() => setMode("home")} aria-label="Learnade home">
           <span className="brand-mark">L</span><span>Learnade</span>
@@ -69,7 +75,7 @@ export default function LearnadeApp() {
           <button className="nav-link active" onClick={() => document.getElementById("library")?.scrollIntoView({behavior:"smooth"})}>My learning</button>
           <button className="nav-link" onClick={() => setShowUpload(true)}>New Learnade</button>
         </nav>
-        <div className="profile"><span className="save-dot" /> {saved ? "Saved locally" : "Saving…"}<span className="avatar" aria-hidden="true">L</span></div>
+        <div className="header-actions"><ThemeToggle theme={theme} onToggle={toggleTheme}/><div className="profile"><span className="save-dot" /> {saved ? "Saved locally" : "Saving…"}<span className="avatar" aria-hidden="true">L</span></div></div>
       </header>
 
       <section className="hero">
@@ -168,11 +174,11 @@ function UploadModal({ source, onClose, onCreate }: { source: string; onClose: (
   </div>;
 }
 
-function StudyMode({ mode, title, source, learningPackage, learnadeId, onChangeMode, onBack }: { mode: Mode; title: string; source: string; learningPackage:LearningPackage; learnadeId:string; onChangeMode:(mode:Mode)=>void; onBack: () => void }) {
+function StudyMode({ mode, theme, onToggleTheme, title, source, learningPackage, learnadeId, onChangeMode, onBack }: { mode: Mode; theme:Theme; onToggleTheme:()=>void; title: string; source: string; learningPackage:LearningPackage; learnadeId:string; onChangeMode:(mode:Mode)=>void; onBack: () => void }) {
   const label = modes.find(m => m.id === mode)?.title || "Study";
   const [readerTarget,setReaderTarget]=useState<string|null>(null);
-  return <main className="study-shell">
-    <header className="study-topbar"><button className="brand" onClick={onBack}><span className="brand-mark">L</span>Learnade</button><div><small>STUDY MATERIAL</small><strong>{title}</strong></div><button className="secondary" onClick={onBack}>Exit session</button></header>
+  return <main className="study-shell" data-theme={theme}>
+    <header className="study-topbar"><button className="brand" onClick={onBack}><span className="brand-mark">L</span>Learnade</button><div><small>STUDY MATERIAL</small><strong>{title}</strong></div><span className="study-actions"><ThemeToggle theme={theme} onToggle={onToggleTheme}/><button className="secondary" onClick={onBack}>Exit session</button></span></header>
     <div className="study-layout">
       <aside><button className="back-link" onClick={onBack}>← <span>All modes</span></button><span className="eyebrow">LEARNING MODE</span><h1>{label}</h1><p>Switch whenever your attention or energy changes.</p><div className="side-progress"><span>Ready to study</span><strong>{learningPackage.sections.length}</strong><span>source sections</span></div></aside>
       <section className="workspace">
@@ -247,5 +253,5 @@ function Quiz({questions,learnadeId}:{questions:LearningPackage["quiz"];learnade
   const restart=()=>{setIndex(0);setSelected(null);setScore(0);setComplete(false);};
   if(!question)return <div className="quiz-panel quiz-results"><span className="completion-mark">!</span><h2>Not enough source material yet.</h2><p>Add more text to generate practice questions.</p></div>;
   if(complete)return <div className="quiz-panel quiz-results"><span className="completion-mark">{score>=Math.ceil(questions.length*.8)?"✓":"↻"}</span><span className="eyebrow">QUIZ COMPLETE</span><h2>{score} out of {questions.length}</h2><p>{score>=Math.ceil(questions.length*.8)?"Strong work. You have a solid grasp of the material.":"Good start. Another pass will strengthen the concepts that are still forming."}</p><button className="primary" onClick={restart}>Try the quiz again</button></div>;
-  return <div className="quiz-panel"><div className="quiz-progress"><i style={{width:`${((index+1)/questions.length)*100}%`}} /></div><span className="eyebrow">QUESTION {index+1} OF {questions.length} · FROM YOUR SOURCE</span><h2>{question.prompt}</h2>{question.options.map((v,i) => <button disabled={selected!==null} className={`answer ${selected!==null&&i===question.answer?"correct":""} ${selected===i&&i!==question.answer?"incorrect":""}`} key={v} onClick={() => choose(i)}><span>{String.fromCharCode(65+i)}</span>{v}</button>)}{selected!==null && <div className="feedback"><strong>{selected===question.answer?"Exactly right.":"Not quite—here’s the connection."}</strong><p>{question.explanation}</p><button className="primary" onClick={next}>{index===questions.length-1?"See my results":"Next question →"}</button></div>}</div>;
+  return <div className="quiz-panel"><div className="quiz-progress"><i style={{width:`${((index+1)/questions.length)*100}%`}} /></div><span className="eyebrow">QUESTION {index+1} OF {questions.length} · FROM YOUR SOURCE</span><h2>{question.prompt}</h2>{question.options.map((v,i) => {const correct=selected!==null&&i===question.answer;const wrong=selected===i&&i!==question.answer;return <button disabled={selected!==null} aria-label={`${v}${correct?", correct answer":wrong?", your selection, incorrect":""}`} className={`answer ${correct?"correct":""} ${wrong?"incorrect":""}`} key={v} onClick={() => choose(i)}><span>{String.fromCharCode(65+i)}</span>{v}{correct&&<em className="answer-state">✓ Correct</em>}{wrong&&<em className="answer-state">✕ Try again</em>}</button>})}{selected!==null && <div className="feedback"><strong>{selected===question.answer?"Exactly right.":"Not quite—here’s the connection."}</strong><p>{question.explanation}</p><button className="primary" onClick={next}>{index===questions.length-1?"See my results":"Next question →"}</button></div>}</div>;
 }
