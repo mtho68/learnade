@@ -29,7 +29,13 @@ export function buildMockExam(materials: CourseMaterial[], selectedMaterialIds: 
     materialId: material.id,
     materialTitle: material.title,
   })));
-  const questions = interleave(groups).slice(0, Math.max(0, requestedCount));
+  const seenStatements = new Set<string>();
+  const questions = interleave(groups).filter(question => {
+    const statement = question.explanation.toLowerCase().replace(/\s+/g, " ").trim();
+    if (seenStatements.has(statement)) return false;
+    seenStatements.add(statement);
+    return true;
+  }).slice(0, Math.max(0, requestedCount));
   return {
     questions,
     sections: combineCourseMaterials(selected, courseTitle).sections,

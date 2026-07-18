@@ -32,3 +32,12 @@ test("legacy material ids remain grounded and grading counts unanswered as misse
   assert.equal(result.unanswered,Math.max(0,exam.questions.length-1));
   assert.equal(result.missed.length,Math.max(0,exam.questions.length-1));
 });
+
+test("mock exam removes duplicate source statements across materials", () => {
+  const first=material("one","Memory");const second=material("two","Memory copy");
+  second.package={...second.package,quiz:second.package.quiz.map((question,index)=>index===0?{...question,explanation:first.package.quiz[0].explanation}:question)};
+  const exam=buildMockExam([first,second],["one","two"],999,"Psychology");
+  const statements=exam.questions.map(question=>question.explanation.toLowerCase().replace(/\s+/g," ").trim());
+  assert.equal(new Set(statements).size,statements.length);
+  assert.ok(exam.questions.every(question=>question.id.startsWith(`exam:${question.materialId}:`)));
+});

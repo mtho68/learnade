@@ -11,6 +11,8 @@ test("sample course demonstrates three grounded material types", () => {
   assert.ok(course.package.quiz.length>=10);
   const sections=new Set(course.package.sections.map(section=>section.id));
   assert.ok(course.package.quiz.every(question=>sections.has(question.sourceSection)));
+  assert.ok(!course.package.keyTerms.some(term=>term.term.toLowerCase()==="without"));
+  course.materials.forEach(material=>assert.equal(new Set(material.package.quiz.map(question=>question.explanation.toLowerCase())).size,material.package.quiz.length));
 });
 
 test("dashboard calculates progress, due work, weak concepts, and a next action", () => {

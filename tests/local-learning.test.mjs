@@ -32,6 +32,18 @@ test("creates quiz prompts with one defensible answer",()=>{
   }
 });
 
+test("filters function words and creates no duplicate questions from one source sentence",()=>{
+  const source="Retrieval practice strengthens access to memory without looking at the answer. Retrieval practice improves recall over time. Students practice retrieval within short sessions. Feedback helps students correct memory errors. Spacing strengthens durable learning. Interleaving helps learners choose strategies.";
+  const result=generateLocalLearningPackage(source,"Learning science");
+  const terms=result.keyTerms.map(item=>item.term.toLowerCase());
+  assert.ok(!terms.includes("without"));
+  assert.ok(!terms.includes("within"));
+  const sourceStatements=result.quiz.map(question=>question.explanation.toLowerCase());
+  assert.equal(result.quiz.length,5);
+  assert.equal(new Set(sourceStatements).size,sourceStatements.length,"quiz repeated a source sentence");
+  assert.deepEqual(result.quiz.map(question=>question.id),["quiz-1","quiz-2","quiz-3","quiz-4","quiz-5"]);
+});
+
 test("schedules successful cards farther apart and failed cards immediately",()=>{
   const now=new Date("2026-07-18T00:00:00.000Z");
   const first=scheduleCard(undefined,"known",now);
