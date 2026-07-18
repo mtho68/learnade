@@ -1,13 +1,16 @@
 const DB_NAME = "learnade";
 const STORE = "learning-library";
 
+let databasePromise:Promise<IDBDatabase>|null=null;
+
 function db() {
-  return new Promise<IDBDatabase>((resolve, reject) => {
+  databasePromise ||= new Promise<IDBDatabase>((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, 1);
     request.onupgradeneeded = () => request.result.createObjectStore(STORE, { keyPath: "id" });
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   });
+  return databasePromise;
 }
 
 export async function loadLibrary<T>(): Promise<T[]> {
@@ -22,15 +25,17 @@ export async function loadLibrary<T>(): Promise<T[]> {
 export async function saveLibraryItem<T>(item: T) {
   const database = await db();
   await new Promise<void>((resolve, reject) => {
-    const request = database.transaction(STORE, "readwrite").objectStore(STORE).put(item);
-    request.onsuccess = () => resolve(); request.onerror = () => reject(request.error);
+    const transaction=database.transaction(STORE,"readwrite");
+    transaction.objectStore(STORE).put(item);
+    transaction.oncomplete=()=>resolve(); transaction.onerror=()=>reject(transaction.error); transaction.onabort=()=>reject(transaction.error);
   });
 }
 
 export async function deleteLibraryItem(id: string) {
   const database = await db();
   await new Promise<void>((resolve, reject) => {
-    const request = database.transaction(STORE, "readwrite").objectStore(STORE).delete(id);
-    request.onsuccess = () => resolve(); request.onerror = () => reject(request.error);
+    const transaction=database.transaction(STORE,"readwrite");
+    transaction.objectStore(STORE).delete(id);
+    transaction.oncomplete=()=>resolve(); transaction.onerror=()=>reject(transaction.error); transaction.onabort=()=>reject(transaction.error);
   });
 }

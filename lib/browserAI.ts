@@ -1,49 +1,59 @@
 import { generateLocalLearningPackage, type LearningPackage } from "./localLearning";
 
-const MODEL = "onnx-community/Qwen2.5-0.5B-Instruct";
-let generatorPromise: Promise<any> | null = null;
+const MODEL="onnx-community/Qwen2.5-0.5B-Instruct";
+type RecordValue=Record<string,unknown>;
+type Generator=(messages:Array<{role:string;content:string}>,options:RecordValue)=>Promise<unknown>;
+let generatorPromise:Promise<Generator>|null=null;
 
-function extractJson(value: string) {
-  const fenced = value.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1];
-  const candidate = fenced || value.slice(value.indexOf("{"), value.lastIndexOf("}") + 1);
-  return JSON.parse(candidate);
+const isRecord=(value:unknown):value is RecordValue=>typeof value==="object"&&value!==null&&!Array.isArray(value);
+const records=(value:unknown)=>Array.isArray(value)?value.filter(isRecord):[];
+const text=(value:unknown)=>typeof value==="string"?value.trim():"";
+
+function extractJson(value:string):RecordValue {
+  const fenced=value.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1];
+  const start=value.indexOf("{"); const end=value.lastIndexOf("}");
+  const parsed:unknown=JSON.parse(fenced||(start>=0&&end>start?value.slice(start,end+1):"{}"));
+  if(!isRecord(parsed))throw new Error("The model returned an invalid study package.");
+  return parsed;
 }
 
-export async function generateWithBrowserAI(
-  text: string,
-  title: string,
-  onProgress: (message: string) => void,
-): Promise<LearningPackage> {
-  if (!("gpu" in navigator)) throw new Error("WebGPU is unavailable in this browser.");
+async function loadGenerator(onProgress:(message:string)=>void):Promise<Generator>{
+  if(!("gpu" in navigator))throw new Error("WebGPU is unavailable in this browser.");
+  generatorPromise||=import("@huggingface/transformers").then(async({pipeline})=>{
+    const model=await pipeline("text-generation",MODEL,{device:"webgpu",dtype:"q4f16",progress_callback:(event:unknown)=>{
+      if(isRecord(event)&&event.status==="progress"&&typeof event.progress==="number")onProgress(`Downloading on-device AI… ${Math.round(event.progress)}%`);
+    }});
+    return model as unknown as Generator;
+  }).catch(error=>{generatorPromise=null;throw error});
+  return generatorPromise;
+}
+
+export async function generateWithBrowserAI(textSource:string,title:string,onProgress:(message:string)=>void):Promise<LearningPackage>{
   onProgress("Loading the free on-device model… first use downloads about 500 MB.");
-  generatorPromise ||= import("@huggingface/transformers").then(({ pipeline }) => pipeline(
-    "text-generation",
-    MODEL,
-    { device: "webgpu", dtype: "q4f16", progress_callback: (event: any) => {
-      if (event?.status === "progress" && Number.isFinite(event.progress)) onProgress(`Downloading on-device AI… ${Math.round(event.progress)}%`);
-    } },
-  ));
-  const generator = await generatorPromise;
+  const generator=await loadGenerator(onProgress);
   onProgress("The on-device AI is building grounded study materials…");
-  const source = text.replace(/\s+/g, " ").slice(0, 12000);
-  const prompt = `Create study materials using ONLY the source. Return JSON with keys overview (string), objectives (string[]), keyTerms ({term,definition}[]), flashcards ({front,back}[]), quiz ({prompt,options:string[4],answer:number,explanation}[]), narration (string). Make 5-8 terms/cards and 5 quiz questions. answer is a zero-based option index. No markdown.\nTITLE: ${title}\nSOURCE: ${source}`;
-  const result: any = await generator([{ role: "user", content: prompt }], { max_new_tokens: 1400, do_sample: false });
-  const generated = result?.[0]?.generated_text;
-  const raw = Array.isArray(generated) ? generated.at(-1)?.content : generated;
-  const ai = extractJson(String(raw || ""));
-  const base = generateLocalLearningPackage(text, title);
-  const terms = Array.isArray(ai.keyTerms) ? ai.keyTerms.slice(0, 10) : [];
-  const cards = Array.isArray(ai.flashcards) ? ai.flashcards.slice(0, 10) : [];
-  const quiz = Array.isArray(ai.quiz) ? ai.quiz.filter((q:any)=>Array.isArray(q.options)&&q.options.length===4&&Number.isInteger(q.answer)&&q.answer>=0&&q.answer<4).slice(0,8) : [];
-  return {
-    ...base,
-    overview: typeof ai.overview === "string" ? ai.overview : base.overview,
-    objectives: Array.isArray(ai.objectives) ? ai.objectives.filter((v:any)=>typeof v === "string").slice(0,6) : base.objectives,
-    keyTerms: terms.length ? terms.map((v:any,i:number)=>({ term:String(v.term||`Term ${i+1}`), definition:String(v.definition||""), sourceSection:base.sections[i%base.sections.length].id })) : base.keyTerms,
-    flashcards: cards.length ? cards.map((v:any,i:number)=>({ id:`ai-card-${i+1}`, front:String(v.front||""), back:String(v.back||""), sourceSection:base.sections[i%base.sections.length].id })) : base.flashcards,
-    quiz: quiz.length ? quiz.map((v:any,i:number)=>({ id:`ai-quiz-${i+1}`, prompt:String(v.prompt||""), options:v.options.map(String), answer:v.answer, explanation:String(v.explanation||"Review the matching source section."), sourceSection:base.sections[i%base.sections.length].id })) : base.quiz,
-    narration: typeof ai.narration === "string" ? ai.narration : base.narration,
+  const source=textSource.replace(/\s+/g," ").slice(0,12000);
+  const prompt=`Create study materials using ONLY the source. Return JSON with keys overview (string), objectives (string[]), keyTerms ({term,definition}[]), flashcards ({front,back}[]), quiz ({prompt,options:string[4],answer:number,explanation}[]), narration (string). Make 5-8 terms/cards and 5 quiz questions. answer is a zero-based option index. No markdown.\nTITLE: ${title}\nSOURCE: ${source}`;
+  const result=await generator([{role:"user",content:prompt}],{max_new_tokens:1400,do_sample:false});
+  const first=Array.isArray(result)&&isRecord(result[0])?result[0]:{};
+  const generated=first.generated_text;
+  const last=Array.isArray(generated)?generated.at(-1):generated;
+  const raw=isRecord(last)?last.content:last;
+  const ai=extractJson(text(raw));
+  const base=generateLocalLearningPackage(textSource,title);
+  const sourceSection=(...values:unknown[])=>{const haystack=values.map(String).join(" ").toLowerCase();return base.sections.find(section=>section.title.toLowerCase().split(/\s+/).some(word=>word.length>4&&haystack.includes(word)))||base.sections.find(section=>section.text.toLowerCase().split(/\s+/).some(word=>word.length>5&&haystack.includes(word)))||base.sections[0]};
+  const terms=records(ai.keyTerms).filter(value=>text(value.term)&&text(value.definition)).slice(0,10);
+  const cards=records(ai.flashcards).filter(value=>text(value.front)&&text(value.back)).slice(0,10);
+  const quiz=records(ai.quiz).filter(value=>Array.isArray(value.options)&&value.options.length===4&&value.options.every(option=>typeof option==="string")&&Number.isInteger(value.answer)&&Number(value.answer)>=0&&Number(value.answer)<4&&text(value.prompt)).slice(0,8);
+  const objectives=Array.isArray(ai.objectives)?ai.objectives.filter((value):value is string=>typeof value==="string"&&Boolean(value.trim())).slice(0,6):[];
+  return {...base,
+    overview:text(ai.overview)||base.overview,
+    objectives:objectives.length?objectives:base.objectives,
+    keyTerms:terms.length?terms.map((value,index)=>({term:text(value.term)||`Term ${index+1}`,definition:text(value.definition),sourceSection:sourceSection(value.term,value.definition).id})):base.keyTerms,
+    flashcards:cards.length?cards.map((value,index)=>({id:`ai-card-${index+1}`,front:text(value.front),back:text(value.back),sourceSection:sourceSection(value.front,value.back).id})):base.flashcards,
+    quiz:quiz.length?quiz.map((value,index)=>({id:`ai-quiz-${index+1}`,prompt:text(value.prompt),options:(value.options as string[]).map(String),answer:Number(value.answer),explanation:text(value.explanation)||"Review the matching source section.",sourceSection:sourceSection(value.prompt,value.explanation).id})):base.quiz,
+    narration:text(ai.narration)||base.narration,
   };
 }
 
-export const browserAIModel = MODEL;
+export const browserAIModel=MODEL;

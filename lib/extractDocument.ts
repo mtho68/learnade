@@ -19,12 +19,9 @@ async function extractPdf(file: File) {
   const pdfjs = await import("pdfjs-dist");
   pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
   const document = await pdfjs.getDocument({ data: await file.arrayBuffer() }).promise;
+  if(document.numPages>150){await document.destroy();throw new Error("Choose a PDF with 150 pages or fewer.");}
   const pages: string[] = [];
-  for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
-    const page = await document.getPage(pageNumber);
-    const content = await page.getTextContent();
-    pages.push(content.items.map((item) => ("str" in item ? item.str : "")).join(" "));
-  }
+  try{for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {const page=await document.getPage(pageNumber);const content=await page.getTextContent();pages.push(content.items.map((item)=>("str" in item?item.str:"")).join(" "));page.cleanup()}}finally{await document.destroy()}
   return pages.join("\n\n");
 }
 
@@ -40,6 +37,7 @@ async function extractPptx(file: File) {
   const slideNames = Object.keys(zip.files)
     .filter((name) => /^ppt\/slides\/slide\d+\.xml$/.test(name))
     .sort((a, b) => Number(a.match(/\d+/)?.[0]) - Number(b.match(/\d+/)?.[0]));
+  if(slideNames.length>200)throw new Error("Choose a presentation with 200 slides or fewer.");
   const slides: string[] = [];
   for (const name of slideNames) {
     const xml = await zip.file(name)?.async("text");

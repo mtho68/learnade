@@ -2,8 +2,6 @@
 
 Learnade turns PDFs, DOCX files, PPTX decks, TXT files, and pasted notes into a neuroinclusive study workspace. Everything can run in the browser without asking a learner for an API key.
 
-Learnade also supports optional **Sign in with ChatGPT** through OpenAI OAuth. This verifies a learner's OpenAI identity without exposing passwords, API keys, chat history, or subscription credits. Authentication is optional and distinct from model inference: OpenAI does not currently document Sign in with ChatGPT tokens as third-party Responses API billing credentials, so Learnade does not misuse them that way.
-
 ## What it does
 
 - Accessible Reader with the real OpenDyslexic font, adjustable type, and line focus
@@ -14,7 +12,6 @@ Learnade also supports optional **Sign in with ChatGPT** through OpenAI OAuth. T
 - Local document extraction and an IndexedDB learning library
 - Optional free on-device AI using `onnx-community/Qwen2.5-0.5B-Instruct` through Transformers.js; WebGPU users download the quantized model once, and source text stays in their browser
 - A deterministic instant generator remains available when AI is declined, unsupported, or offline
-- Optional OpenAI OAuth identity through Sign in with ChatGPT, with anonymous/local use preserved
 
 ## Inspiration
 
@@ -24,7 +21,7 @@ Long-form studying can make the material feel harder to enter than it needs to b
 
 Learnade was designed and implemented collaboratively in Codex with GPT-5.6. They helped turn the product idea into an architecture, build the React application, implement document extraction and browser storage, create and refine the accessible UI, debug interaction problems, research model and media licensing, run automated QA, and prepare deployment. Codex was the development workspace and agent; GPT-5.6 supplied the reasoning and coding capability used during development.
 
-They are not hidden runtime dependencies and learners do not need an OpenAI key. At runtime, the optional generative feature uses the openly licensed Qwen2.5 0.5B model locally in the browser. The non-AI path is fully client-side and deterministic. OpenAI OAuth is used for optional identity, not falsely presented as delegated API inference.
+They are not hidden runtime dependencies and learners do not need an OpenAI key. At runtime, the optional generative feature uses the openly licensed Qwen2.5 0.5B model locally in the browser. The non-AI path is fully client-side and deterministic. Learnade intentionally does not show an OpenAI sign-in button because OpenAI OAuth does not provide third-party model-inference credits; a sign-in that powered nothing would make the experience less clear.
 
 ## Challenges
 

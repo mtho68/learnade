@@ -13,7 +13,7 @@ export type LearningPackage = {
 };
 
 const STOP = new Set("about after again against also among because been before being between both could does doing down during each from further have having here into itself just more most other over same should some such than that their them then there these they this those through under very what when where which while will with would your notes lecture chapter section page slide using used uses into onto only much many were was are has had its our out how why who can may might must and but for not you the she him her his ours theirs".split(" "));
-const sentences = (text: string) => text.replace(/\s+/g, " ").split(/(?<=[.!?])\s+/).map((s) => s.trim()).filter((s) => s.length > 28);
+const sentences = (text: string) => text.replace(/\s+/g, " ").split(/(?<=[.!?])\s+/).map((s) => s.trim()).filter(Boolean);
 const short = (value: string, length = 150) => value.length <= length ? value : `${value.slice(0, length).replace(/\s+\S*$/, "")}…`;
 const heading = (sentence: string, index: number) => {
   const words = sentence.replace(/[^\w\s-]/g, "").split(/\s+/).filter((word) => word.length > 3 && !STOP.has(word.toLowerCase())).slice(0, 5);
