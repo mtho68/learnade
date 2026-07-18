@@ -9,8 +9,10 @@ import { deleteLectureAudio, deleteLibraryItem, loadLectureAudio, loadLibrary, s
 import { masteryPercent, recordAnswer, scheduleCard, type CardReview, type SectionMastery } from "../lib/mastery";
 import { addCourseMaterial, combineCourseMaterials, courseSource, normalizeCourse, removeCourseMaterial, renameCourse, type CourseMaterial, type MaterialKind, type SavedCourse } from "../lib/courseLibrary";
 import { buildMockExam, gradeMockExam, type MockExam as MockExamData } from "../lib/mockExam";
+import { buildDashboardSnapshot, type AttemptSummary, type DashboardSnapshot } from "../lib/courseDashboard";
+import { createSampleCourse, SAMPLE_COURSE_ID } from "../lib/sampleCourse";
 
-type Mode = "home" | "plan" | "reader" | "speed" | "focus" | "brainrot" | "guide" | "cards" | "quiz" | "exam";
+type Mode = "home" | "dashboard" | "plan" | "reader" | "speed" | "focus" | "brainrot" | "guide" | "cards" | "quiz" | "exam";
 type Theme = "light" | "dark";
 
 const sampleText = `Photosynthesis is the process plants use to convert light energy into chemical energy. It occurs primarily in chloroplasts. During the light-dependent reactions, chlorophyll absorbs sunlight and helps produce ATP and NADPH. The Calvin cycle then uses that stored energy to convert carbon dioxide into glucose. Water is split during the light-dependent reactions, releasing oxygen as a byproduct. Temperature, light intensity, and carbon dioxide concentration can all affect the rate of photosynthesis.`;
@@ -24,6 +26,7 @@ type SpeechRecognitionLike={continuous:boolean;interimResults:boolean;lang:strin
 type SpeechRecognitionCtor=new()=>SpeechRecognitionLike;
 
 const modes = [
+  { id: "dashboard", icon: "◫", title: "Course Dashboard", text: "See mastery, ready reviews, weak concepts, and your next step." },
   { id: "plan", icon: "◎", title: "My Study Plan", text: "Start with a quick check and focus on what needs work." },
   { id: "reader", icon: "Aa", title: "Accessible Reader", text: "Tune type, spacing, color, and focus to fit your eyes." },
   { id: "speed", icon: "▶", title: "Speed Reader", text: "Read one perfectly centered word at a time." },
@@ -46,6 +49,7 @@ export default function LearnadeApp() {
   const [recordTarget, setRecordTarget] = useState<{courseId?:string}|null>(null);
   const [manageCourseId, setManageCourseId] = useState<string|null>(null);
   const [saved, setSaved] = useState(true);
+  const [libraryLoaded,setLibraryLoaded]=useState(false);
   const [theme,setTheme]=useState<Theme>("light");
 
   useEffect(()=>{const timer=setTimeout(()=>{const stored=localStorage.getItem("learnade-theme");setTheme(stored==="dark"||(!stored&&window.matchMedia("(prefers-color-scheme: dark)").matches)?"dark":"light")},0);return()=>clearTimeout(timer)},[]);
@@ -56,11 +60,11 @@ export default function LearnadeApp() {
       if(!parsed.length){try{const legacy=JSON.parse(localStorage.getItem("learnade-library")||"[]") as SavedCourse[];if(Array.isArray(legacy)){parsed=legacy;localStorage.removeItem("learnade-library")}}catch{}}
       const normalized=parsed.map(normalizeCourse);await Promise.all(normalized.map(saveLibraryItem));
       const sorted=normalized.sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)); setLibrary(sorted); if(sorted[0]) { setSource(sorted[0].source); setTitle(sorted[0].title); setLearningPackage(sorted[0].package); setActiveId(sorted[0].id); }
-    }).catch(()=>setSaved(false));
+    }).catch(()=>setSaved(false)).finally(()=>setLibraryLoaded(true));
   }, []);
 
-  const activateCourse=(item:SavedCourse,nextMode:Mode="reader")=>{setSource(item.source);setTitle(item.title);setLearningPackage(item.package);setActiveId(item.id);setMode(nextMode)};
-  const persistCourse=async(item:SavedCourse,activate=true)=>{setSaved(false);setLibrary(items=>[item,...items.filter(course=>course.id!==item.id)].sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)));if(activate)activateCourse(item,"plan");await saveLibraryItem(item);setSaved(true)};
+  const activateCourse=(item:SavedCourse,nextMode:Mode="dashboard")=>{setSource(item.source);setTitle(item.title);setLearningPackage(item.package);setActiveId(item.id);setMode(nextMode)};
+  const persistCourse=async(item:SavedCourse,activate=true)=>{setSaved(false);setLibrary(items=>[item,...items.filter(course=>course.id!==item.id)].sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)));if(activate)activateCourse(item,"dashboard");await saveLibraryItem(item);setSaved(true)};
   const saveMaterial = async (value:string,courseTitle:string,materialTitle:string,kind:MaterialKind,generated?:LearningPackage,courseId?:string,audio?:{blob:Blob;durationMs:number}) => {
     const now=new Date().toISOString();const cleanMaterialTitle=materialTitle.trim()||"New material";
     const materialId=crypto.randomUUID();const audioId=audio?crypto.randomUUID():undefined;
@@ -71,10 +75,11 @@ export default function LearnadeApp() {
   };
 
   const openItem = (item:SavedCourse) => activateCourse(item);
-  const deleteItem = async(id:string) => { if(!confirm("Delete this course and all of its saved material?")) return;const course=library.find(item=>item.id===id);setLibrary(items=>items.filter(item=>item.id!==id));["learnade-card-srs-","learnade-cards-","learnade-quiz-","learnade-mastery-","learnade-diagnostic-"].forEach(prefix=>localStorage.removeItem(`${prefix}${id}`));await Promise.all((course?.materials||[]).flatMap(material=>material.audio?[deleteLectureAudio(material.audio.id)]:[]));await deleteLibraryItem(id); };
+  const deleteItem = async(id:string) => { if(!confirm("Delete this course and all of its saved material?")) return;const course=library.find(item=>item.id===id);setLibrary(items=>items.filter(item=>item.id!==id));["learnade-card-srs-","learnade-cards-","learnade-quiz-","learnade-exam-","learnade-mastery-","learnade-diagnostic-"].forEach(prefix=>localStorage.removeItem(`${prefix}${id}`));await Promise.all((course?.materials||[]).flatMap(material=>material.audio?[deleteLectureAudio(material.audio.id)]:[]));await deleteLibraryItem(id); };
   const updateCourseName=async(id:string,name:string)=>{const course=library.find(item=>item.id===id);if(!course)return;const updated=renameCourse(course,name);await persistCourse(updated,false);if(activeId===id){setTitle(updated.title);setLearningPackage(updated.package)}};
   const deleteMaterial=async(courseId:string,materialId:string)=>{const course=library.find(item=>item.id===courseId);if(!course)return;if(course.materials.length===1){await deleteItem(courseId);setManageCourseId(null);return}if(!confirm("Remove this material from the course? Existing study progress for other materials will stay saved."))return;const material=course.materials.find(item=>item.id===materialId);const updated=removeCourseMaterial(course,materialId);if(material?.audio)await deleteLectureAudio(material.audio.id);localStorage.removeItem(`learnade-diagnostic-${courseId}`);await persistCourse(updated,false);if(activeId===courseId){setSource(updated.source);setTitle(updated.title);setLearningPackage(updated.package)}};
   const activeCourse=library.find(item=>item.id===activeId);
+  const openSample=async()=>{const existing=library.find(item=>item.id===SAMPLE_COURSE_ID);if(existing){activateCourse(existing,"dashboard");return}const sample=createSampleCourse();try{await persistCourse(sample,false);activateCourse(sample,"dashboard")}catch{setSaved(false)}};
 
   if (mode !== "home") {
     const studyMaterials=activeCourse?.materials||[{id:"demo-material",title,source,createdAt:new Date(0).toISOString(),kind:"pasted" as const,package:learningPackage,preserveIds:true}];
@@ -104,6 +109,7 @@ export default function LearnadeApp() {
             <button className="primary" onClick={() => setUploadTarget({})}>＋ Create a course</button>
             <button className="secondary" onClick={() => setRecordTarget(activeCourse?{courseId:activeCourse.id}:{})}>● Record a lecture</button>
           </div>
+          <button className="text-button sample-link" onClick={()=>void openSample()}>Or explore a ready-made sample course →</button>
         </div>
         <div className="hero-art" aria-hidden="true">
           <div className="sun" />
@@ -113,12 +119,11 @@ export default function LearnadeApp() {
         </div>
       </section>
 
-      <section className="continue-card">
-        <div className="material-icon">☀</div>
-        <div className="material-copy"><span className="eyebrow">CONTINUE LEARNING</span><h2>{title}</h2><p>{activeCourse?.materials.length||1} source {(activeCourse?.materials.length||1)===1?"item":"items"} · {modes.length} learning modes ready</p></div>
-        <div className="progress-copy"><strong>{learningPackage.sections.length}</strong><span>sections</span></div>
-        <div className="progress-track"><i /></div>
-        <button className="round-button" onClick={() => setMode("reader")} aria-label="Continue learning">→</button>
+      <section className={`continue-card ${!activeCourse?"sample-continue":""}`}>
+        <div className="material-icon">{activeCourse?"☀":"◎"}</div>
+        <div className="material-copy">{!libraryLoaded?<><span className="eyebrow">LOADING</span><h2>Opening your learning library…</h2></>:activeCourse?<><span className="eyebrow">CONTINUE LEARNING</span><h2>{title}</h2><p>{activeCourse.materials.length} source {activeCourse.materials.length===1?"item":"items"} · {modes.length} learning modes ready</p></>:<><span className="eyebrow">60-SECOND PRODUCT TOUR</span><h2>See a complete Learnade course</h2><p>Open a safe sample with readings, lecture notes, flashcards, quizzes, and mock exams.</p></>}</div>
+        {activeCourse&&<><div className="progress-copy"><strong>{learningPackage.sections.length}</strong><span>sections</span></div><div className="progress-track"><i /></div></>}
+        {libraryLoaded&&<button className="round-button" onClick={() => activeCourse?setMode("dashboard"):void openSample()} aria-label={activeCourse?"Open course dashboard":"Explore sample course"}>→</button>}
       </section>
 
       <section className="modes-section">
@@ -134,7 +139,7 @@ export default function LearnadeApp() {
 
       <section className="library-section" id="library">
         <div className="section-heading"><div><span className="eyebrow">SAVED ON THIS DEVICE</span><h2>My learning library</h2></div><p>Your documents and progress stay in this browser.</p></div>
-        {library.length === 0 ? <div className="library-empty"><strong>Your first course will appear here.</strong><p>Create a course from notes, documents, or a recorded lecture.</p><button className="secondary" onClick={()=>setUploadTarget({})}>Create one now</button></div> : <div className="library-grid">{library.map(item=><article key={item.id}><button className="library-open" onClick={()=>openItem(item)}><span className="material-icon">L</span><span><small>UPDATED {new Date(item.updatedAt).toLocaleDateString()}</small><strong>{item.title}</strong><em>{item.materials.length} {item.materials.length===1?"source":"sources"} · {item.package.flashcards.length} cards</em></span></button><div className="course-actions"><button onClick={()=>setUploadTarget({courseId:item.id})}>＋ Material</button><button onClick={()=>setRecordTarget({courseId:item.id})}>● Lecture</button><button onClick={()=>setManageCourseId(item.id)}>Manage</button></div><button className="delete-item" onClick={()=>deleteItem(item.id)} aria-label={`Delete ${item.title}`}>×</button></article>)}</div>}
+        {libraryLoaded&&library.length === 0 ? <div className="library-empty"><strong>Your first course will appear here.</strong><p>Create one from your own material, or explore a complete sample first.</p><div className="empty-actions"><button className="primary" onClick={()=>void openSample()}>Explore sample course</button><button className="secondary" onClick={()=>setUploadTarget({})}>Create my own</button></div></div> : <div className="library-grid">{library.map(item=><article key={item.id}><button className="library-open" onClick={()=>openItem(item)}><span className="material-icon">L</span><span><small>{item.id===SAMPLE_COURSE_ID?"READY-MADE DEMO":`UPDATED ${new Date(item.updatedAt).toLocaleDateString()}`}</small><strong>{item.title}</strong><em>{item.materials.length} {item.materials.length===1?"source":"sources"} · {item.package.flashcards.length} cards</em></span></button><div className="course-actions"><button onClick={()=>setUploadTarget({courseId:item.id})}>＋ Material</button><button onClick={()=>setRecordTarget({courseId:item.id})}>● Lecture</button><button onClick={()=>setManageCourseId(item.id)}>Manage</button></div><button className="delete-item" onClick={()=>deleteItem(item.id)} aria-label={`Delete ${item.title}`}>×</button></article>)}</div>}
       </section>
 
       {uploadTarget && <UploadModal course={uploadTarget.courseId?library.find(item=>item.id===uploadTarget.courseId):undefined} onClose={() => setUploadTarget(null)} onCreate={async (text, courseTitle, materialTitle, kind, generated) => { await saveMaterial(text,courseTitle,materialTitle,kind,generated,uploadTarget.courseId); setUploadTarget(null); }} />}
@@ -223,6 +228,7 @@ function StudyMode({ mode, theme, onToggleTheme, title, source, materials, learn
     <div className="study-layout">
       <aside><button className="back-link" onClick={onBack}>← <span>All modes</span></button><span className="eyebrow">LEARNING MODE</span><h1>{label}</h1><p>Switch whenever your attention or energy changes.</p><div className="side-progress"><span>Ready to study</span><strong>{learningPackage.sections.length}</strong><span>source sections</span></div></aside>
       <section className="workspace">
+        {mode === "dashboard" && <CourseDashboard courseTitle={title} learningPackage={learningPackage} learnadeId={learnadeId} materialCount={materials.length} onNavigate={onChangeMode} onReview={(id)=>{setReaderTarget(id);onChangeMode("reader")}} />}
         {mode === "plan" && <StudyPlan learningPackage={learningPackage} learnadeId={learnadeId} onNavigate={onChangeMode} onReview={(id)=>{setReaderTarget(id);onChangeMode("reader")}} />}
         {mode === "reader" && <Reader learningPackage={learningPackage} title={title} target={readerTarget} />}
         {mode === "speed" && <SpeedReader source={source} />}
@@ -235,6 +241,15 @@ function StudyMode({ mode, theme, onToggleTheme, title, source, materials, learn
       </section>
     </div>
   </main>;
+}
+
+function CourseDashboard({courseTitle,learningPackage,learnadeId,materialCount,onNavigate,onReview}:{courseTitle:string;learningPackage:LearningPackage;learnadeId:string;materialCount:number;onNavigate:(mode:Mode)=>void;onReview:(id:string)=>void}) {
+  const [snapshot,setSnapshot]=useState<DashboardSnapshot|null>(null);
+  useEffect(()=>{const timer=setTimeout(()=>{const read=(key:string)=>{try{return JSON.parse(localStorage.getItem(key)||"null")}catch{return null}};setSnapshot(buildDashboardSnapshot(learningPackage,read(`learnade-mastery-${learnadeId}`)||{},read(`learnade-card-srs-${learnadeId}`)||{},read(`learnade-quiz-${learnadeId}`) as AttemptSummary|null,read(`learnade-exam-${learnadeId}`) as AttemptSummary|null))},0);return()=>clearTimeout(timer)},[learningPackage,learnadeId]);
+  if(!snapshot)return <div className="dashboard-panel"><span className="eyebrow">COURSE DASHBOARD</span><h2>Loading your course progress…</h2></div>;
+  const recent=snapshot.recentAttempt;const recommendation=snapshot.recommendation;const recentPercent=recent?Math.round((recent.score/recent.total)*100):null;
+  const takeRecommendation=()=>recommendation.sectionId?onReview(recommendation.sectionId):onNavigate(recommendation.mode);
+  return <div className="dashboard-panel"><span className="eyebrow">COURSE DASHBOARD</span><div className="dashboard-heading"><div><h2>{courseTitle}</h2><p>Your progress updates as you study, review cards, and complete assessments.</p></div><span>{materialCount} {materialCount===1?"source":"sources"} · {learningPackage.sections.length} sections</span></div><div className="dashboard-metrics"><article><span>COURSE MASTERY</span><strong>{snapshot.attemptedSections?snapshot.mastery:"—"}{snapshot.attemptedSections&&<small>%</small>}</strong><p>{snapshot.attemptedSections?`${snapshot.attemptedSections} sections measured`:"Not measured yet"}</p></article><article><span>CARDS READY</span><strong>{snapshot.cardsReady}</strong><p>of {snapshot.totalCards} generated cards</p></article><article><span>LATEST RESULT</span><strong>{recentPercent===null?"—":recentPercent}{recentPercent!==null&&<small>%</small>}</strong><p>{recent?`${recent.kind==="exam"?"Mock exam":"Practice quiz"} · ${recent.score}/${recent.total}`:"No assessment yet"}</p></article><article><span>WEAKEST CONCEPT</span><strong className="concept-value">{snapshot.weakSections[0]?.title||"Not measured"}</strong><p>{snapshot.weakSections[0]?`${snapshot.weakSections[0].percent}% across ${snapshot.weakSections[0].attempts} attempts`:"Complete the diagnostic to find it"}</p></article></div><section className="next-step"><div><span className="eyebrow">RECOMMENDED NEXT</span><h3>{recommendation.label}</h3><p>{recommendation.reason}</p></div><button className="primary" onClick={takeRecommendation}>Start now →</button></section><div className="dashboard-lower"><section className="weak-concepts"><span className="eyebrow">CONCEPT MASTERY</span>{snapshot.weakSections.length?snapshot.weakSections.map(section=><button key={section.id} onClick={()=>onReview(section.id)}><span><strong>{section.title}</strong><small>{section.attempts} measured attempts</small></span><i><b style={{width:`${section.percent}%`}} /></i><em>{section.percent}%</em></button>):<div className="dashboard-empty"><strong>Your map starts with one minute.</strong><p>Take the diagnostic and Learnade will identify where to focus.</p><button className="source-link" onClick={()=>onNavigate("plan")}>Start diagnostic →</button></div>}</section><section className="quick-demo"><span className="eyebrow">QUICK DEMO</span><p>Jump into the features that make Learnade different.</p>{[["reader","Aa","Accessible reader"],["brainrot","✦","Brainrot lesson"],["cards","▱","Flashcards"],["quiz","✓","Practice quiz"],["exam","✎","Mock exam"]].map(([nextMode,icon,label])=><button key={nextMode} onClick={()=>onNavigate(nextMode as Mode)}><span>{icon}</span><strong>{label}</strong><b>→</b></button>)}</section></div></div>;
 }
 
 function Reader({ learningPackage, title, target }: { learningPackage:LearningPackage; title:string; target:string|null }) {
