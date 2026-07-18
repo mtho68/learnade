@@ -5,20 +5,22 @@ import "@fontsource/opendyslexic/400.css";
 import { extractDocument } from "../lib/extractDocument";
 import { generateLocalLearningPackage, type LearningPackage } from "../lib/localLearning";
 import { generateWithBrowserAI } from "../lib/browserAI";
-import { deleteLibraryItem, loadLibrary, saveLibraryItem } from "../lib/storage";
+import { deleteLectureAudio, deleteLibraryItem, loadLectureAudio, loadLibrary, saveLectureAudio, saveLibraryItem } from "../lib/storage";
 import { masteryPercent, recordAnswer, scheduleCard, type CardReview, type SectionMastery } from "../lib/mastery";
+import { addCourseMaterial, combineCourseMaterials, courseSource, normalizeCourse, removeCourseMaterial, renameCourse, type CourseMaterial, type MaterialKind, type SavedCourse } from "../lib/courseLibrary";
 
 type Mode = "home" | "plan" | "reader" | "speed" | "focus" | "brainrot" | "guide" | "cards" | "quiz";
 type Theme = "light" | "dark";
 
 const sampleText = `Photosynthesis is the process plants use to convert light energy into chemical energy. It occurs primarily in chloroplasts. During the light-dependent reactions, chlorophyll absorbs sunlight and helps produce ATP and NADPH. The Calvin cycle then uses that stored energy to convert carbon dioxide into glucose. Water is split during the light-dependent reactions, releasing oxygen as a byproduct. Temperature, light intensity, and carbon dioxide concentration can all affect the rate of photosynthesis.`;
 
-type SavedLearnade = { id:string; title:string; source:string; createdAt:string; package:LearningPackage };
-
 function PlayIcon() { return <span className="media-icon play-icon" aria-hidden="true" />; }
 function PauseIcon() { return <span className="media-icon pause-icon" aria-hidden="true"><i /><i /></span>; }
 function ThemeToggle({theme,onToggle}:{theme:Theme;onToggle:()=>void}) { return <button className="theme-toggle" onClick={onToggle} aria-label={`Switch to ${theme==="light"?"dark":"light"} mode`} aria-pressed={theme==="dark"}><span aria-hidden="true">{theme==="light"?"☾":"☀"}</span><span>{theme==="light"?"Dark":"Light"}</span></button>; }
 function sourceEvidence(section:LearningPackage["sections"][number],...values:string[]) { const tokens=new Set(values.join(" ").toLowerCase().match(/[a-z][a-z-]{3,}/g)||[]);return [...section.sentences].sort((a,b)=>[...tokens].filter(token=>b.toLowerCase().includes(token)).length-[...tokens].filter(token=>a.toLowerCase().includes(token)).length)[0]||section.text; }
+type SpeechResultEvent={resultIndex:number;results:ArrayLike<{isFinal:boolean;0:{transcript:string}}>};
+type SpeechRecognitionLike={continuous:boolean;interimResults:boolean;lang:string;start:()=>void;stop:()=>void;abort:()=>void;onresult:((event:SpeechResultEvent)=>void)|null;onerror:((event:{error:string})=>void)|null;onend:(()=>void)|null};
+type SpeechRecognitionCtor=new()=>SpeechRecognitionLike;
 
 const modes = [
   { id: "plan", icon: "◎", title: "My Study Plan", text: "Start with a quick check and focus on what needs work." },
@@ -36,9 +38,11 @@ export default function LearnadeApp() {
   const [source, setSource] = useState(sampleText);
   const [title, setTitle] = useState("The essentials of photosynthesis");
   const [learningPackage, setLearningPackage] = useState(() => generateLocalLearningPackage(sampleText, "The essentials of photosynthesis"));
-  const [library, setLibrary] = useState<SavedLearnade[]>([]);
+  const [library, setLibrary] = useState<SavedCourse[]>([]);
   const [activeId, setActiveId] = useState("demo");
-  const [showUpload, setShowUpload] = useState(false);
+  const [uploadTarget, setUploadTarget] = useState<{courseId?:string}|null>(null);
+  const [recordTarget, setRecordTarget] = useState<{courseId?:string}|null>(null);
+  const [manageCourseId, setManageCourseId] = useState<string|null>(null);
   const [saved, setSaved] = useState(true);
   const [theme,setTheme]=useState<Theme>("light");
 
@@ -46,26 +50,32 @@ export default function LearnadeApp() {
   const toggleTheme=()=>setTheme(current=>{const next=current==="light"?"dark":"light";localStorage.setItem("learnade-theme",next);return next});
 
   useEffect(() => {
-    loadLibrary<SavedLearnade>().then(async parsed => {
-      if(!parsed.length){try{const legacy=JSON.parse(localStorage.getItem("learnade-library")||"[]") as SavedLearnade[];if(Array.isArray(legacy)){await Promise.all(legacy.map(saveLibraryItem));parsed=legacy;localStorage.removeItem("learnade-library")}}catch{}}
-      const sorted=parsed.sort((a,b)=>b.createdAt.localeCompare(a.createdAt)); setLibrary(sorted); if(sorted[0]) { setSource(sorted[0].source); setTitle(sorted[0].title); setLearningPackage(sorted[0].package); setActiveId(sorted[0].id); }
+    loadLibrary<SavedCourse>().then(async parsed => {
+      if(!parsed.length){try{const legacy=JSON.parse(localStorage.getItem("learnade-library")||"[]") as SavedCourse[];if(Array.isArray(legacy)){parsed=legacy;localStorage.removeItem("learnade-library")}}catch{}}
+      const normalized=parsed.map(normalizeCourse);await Promise.all(normalized.map(saveLibraryItem));
+      const sorted=normalized.sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)); setLibrary(sorted); if(sorted[0]) { setSource(sorted[0].source); setTitle(sorted[0].title); setLearningPackage(sorted[0].package); setActiveId(sorted[0].id); }
     }).catch(()=>setSaved(false));
   }, []);
 
-  const saveSource = async (value: string, name: string, generated?:LearningPackage) => {
-    const finalTitle = name || "My new Learnade";
-    const finalPackage = generated || generateLocalLearningPackage(value, finalTitle);
-    const item:SavedLearnade = { id:crypto.randomUUID(), title:finalTitle, source:value, createdAt:new Date().toISOString(), package:finalPackage };
-    const next = [item, ...library];
-    setSource(value); setTitle(finalTitle); setLearningPackage(finalPackage); setLibrary(next); setActiveId(item.id);
-    setSaved(false); await saveLibraryItem(item); setSaved(true);
+  const activateCourse=(item:SavedCourse,nextMode:Mode="reader")=>{setSource(item.source);setTitle(item.title);setLearningPackage(item.package);setActiveId(item.id);setMode(nextMode)};
+  const persistCourse=async(item:SavedCourse,activate=true)=>{setSaved(false);setLibrary(items=>[item,...items.filter(course=>course.id!==item.id)].sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)));if(activate)activateCourse(item,"plan");await saveLibraryItem(item);setSaved(true)};
+  const saveMaterial = async (value:string,courseTitle:string,materialTitle:string,kind:MaterialKind,generated?:LearningPackage,courseId?:string,audio?:{blob:Blob;durationMs:number}) => {
+    const now=new Date().toISOString();const cleanMaterialTitle=materialTitle.trim()||"New material";
+    const materialId=crypto.randomUUID();const audioId=audio?crypto.randomUUID():undefined;
+    const material:CourseMaterial={id:materialId,title:cleanMaterialTitle,source:value,createdAt:now,kind,package:generated||generateLocalLearningPackage(value,cleanMaterialTitle),audio:audio&&audioId?{id:audioId,mimeType:audio.blob.type||"audio/webm",size:audio.blob.size,durationMs:audio.durationMs}:undefined};
+    const existing=courseId?library.find(course=>course.id===courseId):undefined;
+    const item=existing?addCourseMaterial(existing,material,now):{id:crypto.randomUUID(),title:courseTitle.trim()||cleanMaterialTitle,source:courseSource([material]),createdAt:now,updatedAt:now,materials:[material],package:combineCourseMaterials([material],courseTitle.trim()||cleanMaterialTitle)};
+    try{if(audio&&audioId)await saveLectureAudio(audioId,audio.blob);localStorage.removeItem(`learnade-diagnostic-${item.id}`);await persistCourse(item)}catch(error){if(audioId)await deleteLectureAudio(audioId).catch(()=>{});throw error}
   };
 
-  const openItem = (item:SavedLearnade) => { setSource(item.source); setTitle(item.title); setLearningPackage(item.package); setActiveId(item.id); setMode("reader"); };
-  const deleteItem = (id:string) => { if(!confirm("Delete this Learnade and its saved material?")) return; setLibrary(items=>items.filter(item=>item.id!==id));["learnade-card-srs-","learnade-cards-","learnade-quiz-","learnade-mastery-","learnade-diagnostic-"].forEach(prefix=>localStorage.removeItem(`${prefix}${id}`));void deleteLibraryItem(id); };
+  const openItem = (item:SavedCourse) => activateCourse(item);
+  const deleteItem = async(id:string) => { if(!confirm("Delete this course and all of its saved material?")) return;const course=library.find(item=>item.id===id);setLibrary(items=>items.filter(item=>item.id!==id));["learnade-card-srs-","learnade-cards-","learnade-quiz-","learnade-mastery-","learnade-diagnostic-"].forEach(prefix=>localStorage.removeItem(`${prefix}${id}`));await Promise.all((course?.materials||[]).flatMap(material=>material.audio?[deleteLectureAudio(material.audio.id)]:[]));await deleteLibraryItem(id); };
+  const updateCourseName=async(id:string,name:string)=>{const course=library.find(item=>item.id===id);if(!course)return;const updated=renameCourse(course,name);await persistCourse(updated,false);if(activeId===id){setTitle(updated.title);setLearningPackage(updated.package)}};
+  const deleteMaterial=async(courseId:string,materialId:string)=>{const course=library.find(item=>item.id===courseId);if(!course)return;if(course.materials.length===1){await deleteItem(courseId);setManageCourseId(null);return}if(!confirm("Remove this material from the course? Existing study progress for other materials will stay saved."))return;const material=course.materials.find(item=>item.id===materialId);const updated=removeCourseMaterial(course,materialId);if(material?.audio)await deleteLectureAudio(material.audio.id);localStorage.removeItem(`learnade-diagnostic-${courseId}`);await persistCourse(updated,false);if(activeId===courseId){setSource(updated.source);setTitle(updated.title);setLearningPackage(updated.package)}};
+  const activeCourse=library.find(item=>item.id===activeId);
 
   if (mode !== "home") {
-    return <StudyMode mode={mode} theme={theme} onToggleTheme={toggleTheme} title={title} source={source} learningPackage={learningPackage} learnadeId={activeId} onChangeMode={setMode} onBack={() => setMode("home")} />;
+    return <StudyMode mode={mode} theme={theme} onToggleTheme={toggleTheme} title={title} source={source} learningPackage={learningPackage} learnadeId={activeId} onChangeMode={setMode} onBack={() => setMode("home")} onManage={()=>{setMode("home");if(activeCourse)setManageCourseId(activeCourse.id);else setUploadTarget({})}} />;
   }
 
   return (
@@ -76,7 +86,8 @@ export default function LearnadeApp() {
         </button>
         <nav aria-label="Primary navigation">
           <button className="nav-link active" onClick={() => document.getElementById("library")?.scrollIntoView({behavior:"smooth"})}>My learning</button>
-          <button className="nav-link" onClick={() => setShowUpload(true)}>New Learnade</button>
+          <button className="nav-link" onClick={() => setUploadTarget({})}>New course</button>
+          <button className="nav-link" onClick={() => setRecordTarget({})}>Record lecture</button>
         </nav>
         <div className="header-actions"><ThemeToggle theme={theme} onToggle={toggleTheme}/><div className="profile"><span className="save-dot" /> {saved ? "Saved locally" : "Saving…"}<span className="avatar" aria-hidden="true">L</span></div></div>
       </header>
@@ -87,8 +98,8 @@ export default function LearnadeApp() {
           <h1>Make learning<br/><em>work for your brain.</em></h1>
           <p>Turn notes, readings, and slides into study experiences shaped around the way your brain wants to learn today.</p>
           <div className="hero-actions">
-            <button className="primary" onClick={() => setShowUpload(true)}>＋ Create a Learnade</button>
-            <button className="secondary" onClick={() => setMode("focus")}>Continue studying <span>→</span></button>
+            <button className="primary" onClick={() => setUploadTarget({})}>＋ Create a course</button>
+            <button className="secondary" onClick={() => setRecordTarget(activeCourse?{courseId:activeCourse.id}:{})}>● Record a lecture</button>
           </div>
         </div>
         <div className="hero-art" aria-hidden="true">
@@ -101,7 +112,7 @@ export default function LearnadeApp() {
 
       <section className="continue-card">
         <div className="material-icon">☀</div>
-        <div className="material-copy"><span className="eyebrow">CONTINUE LEARNING</span><h2>{title}</h2><p>Study material · 7 learning modes ready</p></div>
+        <div className="material-copy"><span className="eyebrow">CONTINUE LEARNING</span><h2>{title}</h2><p>{activeCourse?.materials.length||1} source {(activeCourse?.materials.length||1)===1?"item":"items"} · 8 learning modes ready</p></div>
         <div className="progress-copy"><strong>{learningPackage.sections.length}</strong><span>sections</span></div>
         <div className="progress-track"><i /></div>
         <button className="round-button" onClick={() => setMode("reader")} aria-label="Continue learning">→</button>
@@ -120,17 +131,20 @@ export default function LearnadeApp() {
 
       <section className="library-section" id="library">
         <div className="section-heading"><div><span className="eyebrow">SAVED ON THIS DEVICE</span><h2>My learning library</h2></div><p>Your documents and progress stay in this browser.</p></div>
-        {library.length === 0 ? <div className="library-empty"><strong>Your first Learnade will appear here.</strong><p>Upload a document or paste notes to create it.</p><button className="secondary" onClick={()=>setShowUpload(true)}>Create one now</button></div> : <div className="library-grid">{library.map(item=><article key={item.id}><button className="library-open" onClick={()=>openItem(item)}><span className="material-icon">L</span><span><small>{new Date(item.createdAt).toLocaleDateString()}</small><strong>{item.title}</strong><em>{item.package.sections.length} sections · {item.package.flashcards.length} cards</em></span></button><button className="delete-item" onClick={()=>deleteItem(item.id)} aria-label={`Delete ${item.title}`}>×</button></article>)}</div>}
+        {library.length === 0 ? <div className="library-empty"><strong>Your first course will appear here.</strong><p>Create a course from notes, documents, or a recorded lecture.</p><button className="secondary" onClick={()=>setUploadTarget({})}>Create one now</button></div> : <div className="library-grid">{library.map(item=><article key={item.id}><button className="library-open" onClick={()=>openItem(item)}><span className="material-icon">L</span><span><small>UPDATED {new Date(item.updatedAt).toLocaleDateString()}</small><strong>{item.title}</strong><em>{item.materials.length} {item.materials.length===1?"source":"sources"} · {item.package.flashcards.length} cards</em></span></button><div className="course-actions"><button onClick={()=>setUploadTarget({courseId:item.id})}>＋ Material</button><button onClick={()=>setRecordTarget({courseId:item.id})}>● Lecture</button><button onClick={()=>setManageCourseId(item.id)}>Manage</button></div><button className="delete-item" onClick={()=>deleteItem(item.id)} aria-label={`Delete ${item.title}`}>×</button></article>)}</div>}
       </section>
 
-      {showUpload && <UploadModal source="" onClose={() => setShowUpload(false)} onCreate={async (text, name, generated) => { await saveSource(text,name,generated); setShowUpload(false); setMode("plan"); }} />}
+      {uploadTarget && <UploadModal course={uploadTarget.courseId?library.find(item=>item.id===uploadTarget.courseId):undefined} onClose={() => setUploadTarget(null)} onCreate={async (text, courseTitle, materialTitle, kind, generated) => { await saveMaterial(text,courseTitle,materialTitle,kind,generated,uploadTarget.courseId); setUploadTarget(null); }} />}
+      {recordTarget && <LectureRecorderModal courses={library} defaultCourseId={recordTarget.courseId} onClose={()=>setRecordTarget(null)} onSave={async(text,courseTitle,lectureTitle,courseId,audio)=>{await saveMaterial(text,courseTitle,lectureTitle,"lecture",undefined,courseId,audio);setRecordTarget(null)}} />}
+      {manageCourseId && library.find(item=>item.id===manageCourseId) && <ManageCourseModal course={library.find(item=>item.id===manageCourseId)!} onClose={()=>setManageCourseId(null)} onRename={updateCourseName} onDeleteMaterial={deleteMaterial} onAddMaterial={()=>{setManageCourseId(null);setUploadTarget({courseId:manageCourseId})}} onRecord={()=>{setManageCourseId(null);setRecordTarget({courseId:manageCourseId})}} />}
     </main>
   );
 }
 
-function UploadModal({ source, onClose, onCreate }: { source: string; onClose: () => void; onCreate: (text: string, title: string, generated?:LearningPackage) => Promise<void> }) {
-  const [text, setText] = useState(source);
-  const [name, setName] = useState("");
+function UploadModal({ course, onClose, onCreate }: { course?:SavedCourse; onClose: () => void; onCreate: (text:string,courseTitle:string,materialTitle:string,kind:MaterialKind,generated?:LearningPackage) => Promise<void> }) {
+  const [text, setText] = useState("");
+  const [courseName, setCourseName] = useState(course?.title||"");
+  const [materialTitle, setMaterialTitle] = useState("");
   const [fileName, setFileName] = useState("");
   const [extracting, setExtracting] = useState(false);
   const [error, setError] = useState("");
@@ -143,7 +157,7 @@ function UploadModal({ source, onClose, onCreate }: { source: string; onClose: (
     setFileName(file.name); setExtracting(true); setError(""); setStatus("Reading your material…");
     try {
       const result = await extractDocument(file);
-      setText(result.text); setName((current) => current || result.title);
+      setText(result.text); setMaterialTitle((current) => current || result.title);
       setStatus(`${result.kind.toUpperCase()} ready · ${result.text.split(/\s+/).length.toLocaleString()} words extracted`);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "We couldn’t read that file."); setStatus("");
@@ -152,36 +166,57 @@ function UploadModal({ source, onClose, onCreate }: { source: string; onClose: (
   const create = async () => {
     if (text.trim().length < 40) { setError("Add a little more study material before continuing."); return; }
     setCreating(true); setError("");
-    const finalTitle=name || "My new Learnade"; let generated:LearningPackage|undefined;
-    if(useAI){ try { generated=await generateWithBrowserAI(text,finalTitle,setStatus); } catch { setStatus("On-device AI was unavailable, so Learnade used its private instant generator instead."); } }
+    const finalMaterialTitle=materialTitle||fileName.replace(/\.[^.]+$/,"")||"New material"; let generated:LearningPackage|undefined;
+    if(!course&&courseName.trim().length<2){setCreating(false);setError("Give this course a name, such as Biology 101.");return}
+    if(useAI){ try { generated=await generateWithBrowserAI(text,finalMaterialTitle,setStatus); } catch { setStatus("On-device AI was unavailable, so Learnade used its private instant generator instead."); } }
     else setStatus("Building your private learning package on this device…");
-    try{await onCreate(text, name, generated);}catch{setCreating(false);setError("Learnade could not save this material. Check available browser storage and try again.");}
+    try{await onCreate(text,course?.title||courseName,finalMaterialTitle,fileName?"upload":"pasted",generated);}catch{setCreating(false);setError("Learnade could not save this material. Check available browser storage and try again.");}
   };
   useEffect(()=>{const close=(event:KeyboardEvent)=>{if(event.key==="Escape"&&!creating)onClose()};window.addEventListener("keydown",close);return()=>window.removeEventListener("keydown",close)},[creating,onClose]);
   return <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="upload-title">
     <div className="modal">
       <button className="modal-close" onClick={onClose} aria-label="Close">×</button>
-      <span className="eyebrow">NEW LEARNADE</span><h2 id="upload-title">What are we learning?</h2><p>Upload source material or paste your notes. Your work stays on this device.</p>
+      <span className="eyebrow">{course?"ADD TO COURSE":"NEW COURSE"}</span><h2 id="upload-title">{course?`Add material to ${course.title}`:"What are we learning?"}</h2><p>Upload source material or paste your notes. Add more lectures and documents anytime.</p>
       <label className="dropzone">
         <input type="file" accept=".pdf,.docx,.pptx,.txt" disabled={extracting||creating} onChange={e => selectFile(e.target.files?.[0])} />
         <span className="upload-bubble">↑</span><strong>{extracting ? "Extracting readable text…" : fileName || "Drop a PDF, DOCX, or PPTX"}</strong><small>{status || "or click to choose a file"}</small>
       </label>
       <div className="or"><span>or paste text</span></div>
-      <label className="field"><span>Material title</span><input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Week 4: Cellular respiration" /></label>
+      {!course&&<label className="field"><span>Course name</span><input value={courseName} onChange={e => setCourseName(e.target.value)} placeholder="e.g. Biology 101" /></label>}
+      <label className="field"><span>Material title</span><input value={materialTitle} onChange={e => setMaterialTitle(e.target.value)} placeholder="e.g. Week 4: Cellular respiration" /></label>
       <label className="field"><span>Study material</span><textarea value={text} onChange={e => setText(e.target.value)} rows={7} /></label>
       <label className="ai-option"><input type="checkbox" disabled={creating} checked={useAI} onChange={e=>setUseAI(e.target.checked)} /><span><strong>Enhance with free on-device AI</strong><small>Optional. Downloads about 500 MB once, needs WebGPU, uses no API key, and keeps text in your browser.</small></span></label>
       {status && <p className="form-status" role="status">{status}</p>}
       {error && <p className="form-error" role="alert">{error}</p>}
-      <div className="modal-actions"><button className="secondary" disabled={creating} onClick={onClose}>Cancel</button><button className="primary" disabled={extracting||creating} onClick={create}>{creating?"Building your Learnade…":extracting ? "Reading file…" : "Create my Learnade →"}</button></div>
+      <div className="modal-actions"><button className="secondary" disabled={creating} onClick={onClose}>Cancel</button><button className="primary" disabled={extracting||creating} onClick={create}>{creating?"Building study materials…":extracting ? "Reading file…" : course?"Add to course →":"Create course →"}</button></div>
     </div>
   </div>;
 }
 
-function StudyMode({ mode, theme, onToggleTheme, title, source, learningPackage, learnadeId, onChangeMode, onBack }: { mode: Mode; theme:Theme; onToggleTheme:()=>void; title: string; source: string; learningPackage:LearningPackage; learnadeId:string; onChangeMode:(mode:Mode)=>void; onBack: () => void }) {
+function LectureRecorderModal({courses,defaultCourseId,onClose,onSave}:{courses:SavedCourse[];defaultCourseId?:string;onClose:()=>void;onSave:(text:string,courseTitle:string,lectureTitle:string,courseId:string|undefined,audio?:{blob:Blob;durationMs:number})=>Promise<void>}) {
+  const [courseId,setCourseId]=useState(defaultCourseId||courses[0]?.id||"new");const [courseName,setCourseName]=useState("");const [lectureTitle,setLectureTitle]=useState(`Lecture ${new Date().toLocaleDateString()}`);const [transcript,setTranscript]=useState("");const [interim,setInterim]=useState("");const [recording,setRecording]=useState(false);const [paused,setPaused]=useState(false);const [seconds,setSeconds]=useState(0);const [supported,setSupported]=useState<{recording:boolean;transcription:boolean}>({recording:false,transcription:false});const [error,setError]=useState("");const [saving,setSaving]=useState(false);const [audioBlob,setAudioBlob]=useState<Blob|null>(null);const [audioUrl,setAudioUrl]=useState("");
+  const recorderRef=useRef<MediaRecorder|null>(null);const recognitionRef=useRef<SpeechRecognitionLike|null>(null);const streamRef=useRef<MediaStream|null>(null);const chunksRef=useRef<Blob[]>([]);const recordingRef=useRef(false);const pausedRef=useRef(false);const audioUrlRef=useRef("");
+  useEffect(()=>{const timer=setTimeout(()=>{const browserWindow=window as Window&{SpeechRecognition?:SpeechRecognitionCtor;webkitSpeechRecognition?:SpeechRecognitionCtor};setSupported({recording:Boolean(navigator.mediaDevices?.getUserMedia&&window.MediaRecorder),transcription:Boolean(browserWindow.SpeechRecognition||browserWindow.webkitSpeechRecognition)})},0);return()=>{clearTimeout(timer);recordingRef.current=false;recognitionRef.current?.abort();streamRef.current?.getTracks().forEach(track=>track.stop());if(audioUrlRef.current)URL.revokeObjectURL(audioUrlRef.current)}},[]);
+  useEffect(()=>{if(!recording||paused)return;const timer=setInterval(()=>setSeconds(value=>value+1),1000);return()=>clearInterval(timer)},[recording,paused]);
+  const stop=()=>{recordingRef.current=false;pausedRef.current=false;try{recognitionRef.current?.stop()}catch{}if(recorderRef.current&&recorderRef.current.state!=="inactive")recorderRef.current.stop();streamRef.current?.getTracks().forEach(track=>track.stop());setRecording(false);setPaused(false);setInterim("")};
+  const start=async()=>{setError("");setAudioBlob(null);setSeconds(0);if(!supported.recording){setError("Audio recording is not available in this browser.");return}try{const stream=await navigator.mediaDevices.getUserMedia({audio:true});streamRef.current=stream;const mime=["audio/webm;codecs=opus","audio/mp4","audio/webm"].find(type=>MediaRecorder.isTypeSupported(type));const recorder=mime?new MediaRecorder(stream,{mimeType:mime}):new MediaRecorder(stream);recorderRef.current=recorder;chunksRef.current=[];recorder.ondataavailable=event=>{if(event.data.size)chunksRef.current.push(event.data)};recorder.onstop=()=>{const blob=new Blob(chunksRef.current,{type:recorder.mimeType||"audio/webm"});setAudioBlob(blob);if(audioUrlRef.current)URL.revokeObjectURL(audioUrlRef.current);const url=URL.createObjectURL(blob);audioUrlRef.current=url;setAudioUrl(url)};
+      if(supported.transcription){const browserWindow=window as Window&{SpeechRecognition?:SpeechRecognitionCtor;webkitSpeechRecognition?:SpeechRecognitionCtor};const Recognition=browserWindow.SpeechRecognition||browserWindow.webkitSpeechRecognition;if(Recognition){const recognition=new Recognition();recognition.continuous=true;recognition.interimResults=true;recognition.lang="en-US";recognition.onresult=event=>{let finalText="";let interimText="";for(let i=event.resultIndex;i<event.results.length;i+=1){const result=event.results[i];if(result.isFinal)finalText+=`${result[0].transcript} `;else interimText+=result[0].transcript}if(finalText)setTranscript(value=>`${value}${value&& !value.endsWith(" ")?" ":""}${finalText}`);setInterim(interimText)};recognition.onerror=event=>{if(event.error!=="no-speech")setError(`Transcription paused: ${event.error.replaceAll("-"," ")}. You can keep recording and edit the notes.`)};recognition.onend=()=>{if(recordingRef.current&&!pausedRef.current){try{recognition.start()}catch{}}};recognitionRef.current=recognition;recognition.start()}}
+      recorder.start(1000);recordingRef.current=true;pausedRef.current=false;setRecording(true);setPaused(false)
+    }catch(reason){streamRef.current?.getTracks().forEach(track=>track.stop());setError(reason instanceof Error&&reason.name==="NotAllowedError"?"Microphone access was not allowed. You can still paste lecture notes instead.":"Learnade could not start the microphone. Check that it is connected and try again.")}};
+  const togglePause=()=>{const recorder=recorderRef.current;if(!recorder)return;if(paused){recorder.resume();pausedRef.current=false;try{recognitionRef.current?.start()}catch{}setPaused(false)}else{recorder.pause();pausedRef.current=true;try{recognitionRef.current?.stop()}catch{}setPaused(true)}};
+  const save=async()=>{if(transcript.trim().length<40){setError("Add a little more transcript before saving this lecture.");return}if(courseId==="new"&&courseName.trim().length<2){setError("Name the course this lecture belongs to.");return}setSaving(true);setError("");try{await onSave(transcript,courseId==="new"?courseName:courses.find(course=>course.id===courseId)?.title||courseName,lectureTitle,courseId==="new"?undefined:courseId,audioBlob?{blob:audioBlob,durationMs:seconds*1000}:undefined)}catch{setSaving(false);setError("The lecture could not be saved. Check available browser storage and try again.")}};
+  return <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="recorder-title"><div className="modal recorder-modal"><button className="modal-close" onClick={()=>{stop();onClose()}} aria-label="Close">×</button><span className="eyebrow">LECTURE CAPTURE</span><h2 id="recorder-title">Record and transcribe</h2><p>Turn a live lecture into searchable course material, flashcards, and quizzes.</p><div className="privacy-note"><strong>Before you record</strong><span>Get permission from the instructor and people nearby. Audio is saved on this device. Live transcription may be processed by your browser’s speech service.</span></div><label className="field"><span>Add to course</span><select value={courseId} onChange={event=>setCourseId(event.target.value)}>{courses.map(course=><option value={course.id} key={course.id}>{course.title}</option>)}<option value="new">＋ New course</option></select></label>{courseId==="new"&&<label className="field"><span>New course name</span><input value={courseName} onChange={event=>setCourseName(event.target.value)} placeholder="e.g. Calculus I" /></label>}<label className="field"><span>Lecture title</span><input value={lectureTitle} onChange={event=>setLectureTitle(event.target.value)} /></label><div className={`recorder-console ${recording?"recording":""}`}><span className="record-light" aria-hidden="true" /><strong>{recording?(paused?"Recording paused":"Recording lecture"):audioBlob?"Recording complete":"Ready to record"}</strong><time>{String(Math.floor(seconds/60)).padStart(2,"0")}:{String(seconds%60).padStart(2,"0")}</time><div className="recorder-buttons">{!recording?<button className="primary" onClick={start} disabled={!supported.recording}>● Start recording</button>:<><button className="secondary" onClick={togglePause}>{paused?"Resume":"Pause"}</button><button className="primary stop-button" onClick={stop}>■ Stop</button></>}</div>{!supported.transcription&&<small>Automatic transcription is unavailable here. Recording still works; add or paste notes below before saving.</small>}</div>{audioUrl&&<audio className="audio-preview" controls src={audioUrl}>Your browser cannot play this recording.</audio>}<label className="field"><span>Live transcript — editable</span><textarea className="transcript-area" value={`${transcript}${interim?`${transcript?" ":""}${interim}`:""}`} onChange={event=>{setTranscript(event.target.value);setInterim("")}} rows={8} placeholder="Your live transcript will appear here. You can also type or paste notes." /></label>{error&&<p className="form-error" role="alert">{error}</p>}<div className="modal-actions"><button className="secondary" disabled={saving} onClick={()=>{stop();onClose()}}>Cancel</button><button className="primary" disabled={recording||saving} onClick={save}>{saving?"Building study materials…":"Save lecture to course →"}</button></div></div></div>;
+}
+
+function AudioPlayer({audioId}:{audioId:string}) { const [url,setUrl]=useState("");const [error,setError]=useState("");useEffect(()=>()=>{if(url)URL.revokeObjectURL(url)},[url]);const load=async()=>{try{const blob=await loadLectureAudio(audioId);if(!blob){setError("Recording unavailable");return}if(url)URL.revokeObjectURL(url);setUrl(URL.createObjectURL(blob))}catch{setError("Recording unavailable")}};return url?<audio className="material-audio" controls src={url}>Your browser cannot play this recording.</audio>:<button className="source-link" onClick={load}>{error||"Play recording"}</button> }
+
+function ManageCourseModal({course,onClose,onRename,onDeleteMaterial,onAddMaterial,onRecord}:{course:SavedCourse;onClose:()=>void;onRename:(id:string,name:string)=>Promise<void>;onDeleteMaterial:(courseId:string,materialId:string)=>Promise<void>;onAddMaterial:()=>void;onRecord:()=>void}) { const [name,setName]=useState(course.title);const [saving,setSaving]=useState(false);const saveName=async()=>{setSaving(true);await onRename(course.id,name);setSaving(false)};return <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="manage-title"><div className="modal manage-modal"><button className="modal-close" onClick={onClose} aria-label="Close">×</button><span className="eyebrow">COURSE SETTINGS</span><h2 id="manage-title">Manage {course.title}</h2><div className="rename-row"><label className="field"><span>Course name</span><input value={name} onChange={event=>setName(event.target.value)} /></label><button className="secondary" disabled={saving||name.trim()===course.title} onClick={saveName}>{saving?"Saving…":"Rename"}</button></div><div className="manager-actions"><button className="primary" onClick={onAddMaterial}>＋ Add material</button><button className="secondary" onClick={onRecord}>● Record lecture</button></div><div className="material-list"><span className="eyebrow">{course.materials.length} SAVED {course.materials.length===1?"ITEM":"ITEMS"}</span>{course.materials.map(material=><article key={material.id}><div className="material-kind" aria-hidden="true">{material.kind==="lecture"?"●":"▤"}</div><div><strong>{material.title}</strong><span>{material.kind} · {new Date(material.createdAt).toLocaleDateString()} · {material.source.split(/\s+/).length.toLocaleString()} words</span>{material.audio&&<AudioPlayer audioId={material.audio.id}/>}</div><button className="remove-material" onClick={()=>void onDeleteMaterial(course.id,material.id)} aria-label={`Remove ${material.title}`}>Remove</button></article>)}</div></div></div> }
+
+function StudyMode({ mode, theme, onToggleTheme, title, source, learningPackage, learnadeId, onChangeMode, onBack, onManage }: { mode: Mode; theme:Theme; onToggleTheme:()=>void; title: string; source: string; learningPackage:LearningPackage; learnadeId:string; onChangeMode:(mode:Mode)=>void; onBack: () => void; onManage:()=>void }) {
   const label = modes.find(m => m.id === mode)?.title || "Study";
   const [readerTarget,setReaderTarget]=useState<string|null>(null);
   return <main className="study-shell" data-theme={theme}>
-    <header className="study-topbar"><button className="brand" onClick={onBack}><span className="brand-mark">L</span><span className="brand-name">Learnade</span></button><div><small>STUDY MATERIAL</small><strong>{title}</strong></div><span className="study-actions"><ThemeToggle theme={theme} onToggle={onToggleTheme}/><button className="secondary" onClick={onBack}>Exit session</button></span></header>
+    <header className="study-topbar"><button className="brand" onClick={onBack}><span className="brand-mark">L</span><span className="brand-name">Learnade</span></button><div><small>COURSE</small><strong>{title}</strong></div><span className="study-actions"><ThemeToggle theme={theme} onToggle={onToggleTheme}/><button className="secondary study-manage" onClick={onManage}>Manage course</button><button className="secondary" onClick={onBack}>Exit session</button></span></header>
     <div className="study-layout">
       <aside><button className="back-link" onClick={onBack}>← <span>All modes</span></button><span className="eyebrow">LEARNING MODE</span><h1>{label}</h1><p>Switch whenever your attention or energy changes.</p><div className="side-progress"><span>Ready to study</span><strong>{learningPackage.sections.length}</strong><span>source sections</span></div></aside>
       <section className="workspace">
