@@ -26,7 +26,7 @@ const modes = [
   { id: "quiz", icon: "✓", title: "Practice Quiz", text: "Check understanding with feedback, not judgment." },
 ] as const;
 
-export default function LearnadeApp() {
+export default function LearnadeApp({openAIUser,signInPath,signOutPath}:{openAIUser:{displayName:string;email:string}|null;signInPath:string;signOutPath:string}) {
   const [mode, setMode] = useState<Mode>("home");
   const [source, setSource] = useState(sampleText);
   const [title, setTitle] = useState("The essentials of photosynthesis");
@@ -66,7 +66,7 @@ export default function LearnadeApp() {
           <button className="nav-link active" onClick={() => document.getElementById("library")?.scrollIntoView({behavior:"smooth"})}>My learning</button>
           <button className="nav-link" onClick={() => setShowUpload(true)}>New Learnade</button>
         </nav>
-        <div className="profile"><span className="save-dot" /> {saved ? "Saved locally" : "Saving…"}<span className="avatar">HT</span></div>
+        <div className="profile"><span className="save-dot" /> {saved ? "Saved locally" : "Saving…"}{openAIUser ? <><span className="openai-user" title={openAIUser.email}>OpenAI connected</span><a className="avatar" href={signOutPath} aria-label="Disconnect OpenAI account">{openAIUser.displayName.slice(0,2).toUpperCase()}</a></> : <a className="openai-connect" href={signInPath}>Continue with OpenAI</a>}</div>
       </header>
 
       <section className="hero">
@@ -85,6 +85,12 @@ export default function LearnadeApp() {
           <div className="orbit orbit-two"><span>Read</span></div>
           <div className="study-card"><small>TODAY&apos;S SESSION</small><strong>12 min</strong><p>3 small steps</p><div className="mini-progress"><i /></div></div>
         </div>
+      </section>
+
+      <section className="openai-panel" aria-labelledby="openai-heading">
+        <div><span className="eyebrow">BUILT FOR OPENAI BUILD WEEK</span><h2 id="openai-heading">OpenAI-connected, without locking anyone out.</h2><p>{openAIUser ? `Connected as ${openAIUser.displayName}. Learnade can recognize your OpenAI identity while your documents and learning progress remain in this browser.` : "Optionally connect your OpenAI account for verified identity. You can still use every learning mode and the private on-device study generator without signing in."}</p></div>
+        {openAIUser ? <a className="secondary" href={signOutPath}>Disconnect OpenAI</a> : <a className="primary" href={signInPath}>Continue with OpenAI →</a>}
+        <small>OpenAI OAuth authenticates your account. It does not expose your password, API key, chats, or subscription credits to Learnade.</small>
       </section>
 
       <section className="continue-card">
