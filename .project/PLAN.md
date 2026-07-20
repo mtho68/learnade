@@ -3,7 +3,7 @@
 > Ordered work only. This is not a transcript or wish list. Keep completed items for the current milestone, then archive old milestones when they no longer aid recovery.
 
 ## Milestone 1: Submission polish
-- Status: in progress
+- Status: complete
 - Deliverable: Public judge-ready Learnade release.
 - Acceptance criteria:
   - Accessible guided tour for every core mode.
@@ -15,7 +15,7 @@
   - [x] Update tests and submission documentation.
   - [x] Pass production build and automated tests.
   - [x] Complete hands-on desktop and mobile browser QA.
-  - [ ] Publish and verify the Sites deployment.
+  - [x] Publish and verify the Sites deployment.
 
 ## Backlog
 - [ ] Consider bundle code splitting after the submission deadline.
