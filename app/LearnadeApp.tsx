@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "@fontsource/opendyslexic/400.css";
 import { extractDocument } from "../lib/extractDocument";
 import { generateLocalLearningPackage, type LearningPackage } from "../lib/localLearning";
@@ -13,6 +13,7 @@ import { addCourseMaterial, combineCourseMaterials, courseSource, normalizeCours
 import { buildMockExam, gradeMockExam, type MockExam as MockExamData } from "../lib/mockExam";
 import { buildDashboardSnapshot, type AttemptSummary, type DashboardSnapshot } from "../lib/courseDashboard";
 import { createDemoCourse, DEMO_COURSES, DEMO_COURSE_IDS, SAMPLE_COURSE_ID } from "../lib/sampleCourse";
+import { availableGuidedTourSteps, type GuidedTourStep } from "../lib/guidedTour";
 
 type Mode = "home" | "dashboard" | "plan" | "reader" | "speed" | "focus" | "brainrot" | "guide" | "cards" | "quiz" | "exam";
 type Theme = "light" | "dark";
@@ -54,35 +55,69 @@ const tourSteps = [
   { target:"[data-tour='quiz']", eyebrow:"PRACTICE QUIZ", title:"Check understanding with explanations.", text:"Quiz results update concept mastery and point you back to the supporting source passage, not just a score." },
   { target:"[data-tour='mock-exam']", eyebrow:"MOCK EXAM", title:"Practice the test you are actually preparing for.", text:"Build an exam from selected course materials, review missed concepts, and retake only the areas that need another pass." },
   { target:"[data-tour='library']", eyebrow:"YOUR LIBRARY", title:"Keep every class in one place.", text:"Add readings, slides, notes, or lecture recordings to a course. Your material and progress stay on this device." },
-] as const;
+] as const satisfies readonly GuidedTourStep[];
 
-function GuidedTour({step,onBack,onNext,onSkip}:{step:number;onBack:()=>void;onNext:()=>void;onSkip:()=>void}) {
-  const item=tourSteps[step];
-  const last=step===tourSteps.length-1;
+function GuidedTour({steps,step,onBack,onNext,onSkip,onUnavailable,returnFocusTarget}:{steps:readonly GuidedTourStep[];step:number;onBack:()=>void;onNext:()=>void;onSkip:()=>void;onUnavailable:()=>void;returnFocusTarget?:HTMLElement|null}) {
+  const item=steps[step];
+  const last=step===steps.length-1;
   const nextRef=useRef<HTMLButtonElement|null>(null);
+  const cardRef=useRef<HTMLElement|null>(null);
+  const originRef=useRef<HTMLElement|null>(null);
   const [spotlight,setSpotlight]=useState<{top:number;left:number;width:number;height:number}|null>(null);
+  const [cardPosition,setCardPosition]=useState<{top:number;left:number}|null>(null);
   useEffect(()=>{
     const target=document.querySelector<HTMLElement>(item.target);
-    if(!target)return;
+    if(!target){onUnavailable();return;}
     const reduced=window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const update=()=>{const rect=target.getBoundingClientRect();setSpotlight({top:Math.max(8,rect.top-8),left:Math.max(8,rect.left-8),width:Math.min(window.innerWidth-16,rect.width+16),height:Math.min(window.innerHeight-16,rect.height+16)});};
-    target.scrollIntoView({behavior:reduced?"auto":"smooth",block:"center"});
-    update();
-    const timer=window.setTimeout(update,reduced?0:360);
+    const update=()=>{
+      const rect=target.getBoundingClientRect();
+      setSpotlight({top:Math.max(8,rect.top-8),left:Math.max(8,rect.left-8),width:Math.min(window.innerWidth-16,rect.width+16),height:Math.min(window.innerHeight-16,rect.height+16)});
+      const card=cardRef.current?.getBoundingClientRect();
+      if(!card)return;
+      const gap=18;const edge=12;
+      let left=Math.min(Math.max(edge,rect.left+(rect.width-card.width)/2),Math.max(edge,window.innerWidth-card.width-edge));
+      const below=rect.bottom+gap;const above=rect.top-card.height-gap;
+      let top:number;
+      if(below+card.height<=window.innerHeight-edge)top=below;
+      else if(above>=edge)top=above;
+      else if(rect.right+gap+card.width<=window.innerWidth-edge){left=rect.right+gap;top=Math.min(Math.max(edge,rect.top+(rect.height-card.height)/2),Math.max(edge,window.innerHeight-card.height-edge));}
+      else if(rect.left-card.width-gap>=edge){left=rect.left-card.width-gap;top=Math.min(Math.max(edge,rect.top+(rect.height-card.height)/2),Math.max(edge,window.innerHeight-card.height-edge));}
+      else top=Math.max(edge,window.innerHeight-card.height-edge);
+      setCardPosition({top,left});
+    };
+    target.scrollIntoView({behavior:reduced?"auto":"smooth",block:window.innerWidth<=700?"start":"center"});
+    const firstFrame=window.requestAnimationFrame(()=>{setSpotlight(null);setCardPosition(null);update();});
+    const timer=window.setTimeout(update,reduced?30:380);
     window.addEventListener("resize",update);
     window.addEventListener("scroll",update,true);
-    return()=>{window.clearTimeout(timer);window.removeEventListener("resize",update);window.removeEventListener("scroll",update,true);};
-  },[item.target]);
+    return()=>{window.cancelAnimationFrame(firstFrame);window.clearTimeout(timer);window.removeEventListener("resize",update);window.removeEventListener("scroll",update,true);};
+  },[item.target,onUnavailable]);
   useEffect(()=>{
-    const timer=window.setTimeout(()=>nextRef.current?.focus(),0);
-    const escape=(event:KeyboardEvent)=>{if(event.key==="Escape")onSkip();};
-    document.addEventListener("keydown",escape);
-    return()=>{window.clearTimeout(timer);document.removeEventListener("keydown",escape);};
-  },[onSkip,step]);
+    originRef.current=returnFocusTarget||(document.activeElement instanceof HTMLElement?document.activeElement:null);
+    return()=>originRef.current?.focus({preventScroll:true});
+  },[returnFocusTarget]);
+  useEffect(()=>{
+    if(!cardPosition)return;
+    const frame=window.requestAnimationFrame(()=>nextRef.current?.focus({preventScroll:true}));
+    return()=>window.cancelAnimationFrame(frame);
+  },[cardPosition,step]);
+  useEffect(()=>{
+    const keyboard=(event:KeyboardEvent)=>{
+      if(event.key==="Escape"){event.preventDefault();onSkip();return;}
+      if(event.key!=="Tab"||!cardRef.current)return;
+      const focusable=[...cardRef.current.querySelectorAll<HTMLElement>('button:not([disabled]),[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])')];
+      if(!focusable.length){event.preventDefault();return;}
+      const first=focusable[0];const final=focusable[focusable.length-1];
+      if(event.shiftKey&&document.activeElement===first){event.preventDefault();final.focus();}
+      else if(!event.shiftKey&&document.activeElement===final){event.preventDefault();first.focus();}
+    };
+    document.addEventListener("keydown",keyboard);
+    return()=>document.removeEventListener("keydown",keyboard);
+  },[onSkip]);
   return <div className="tour-layer" role="dialog" aria-modal="true" aria-labelledby="tour-title" aria-describedby="tour-description">
     {spotlight&&<div className="tour-spotlight" style={{top:spotlight.top,left:spotlight.left,width:spotlight.width,height:spotlight.height}} />}
-    <section className="tour-card">
-      <span className="eyebrow">{item.eyebrow}</span><span className="tour-count">{step+1} of {tourSteps.length}</span>
+    <section ref={cardRef} className="tour-card" style={cardPosition?{top:cardPosition.top,left:cardPosition.left}:{visibility:"hidden"}}>
+      <span className="eyebrow">{item.eyebrow}</span><span className="tour-count">{step+1} of {steps.length}</span>
       <h2 id="tour-title">{item.title}</h2><p id="tour-description">{item.text}</p>
       <div className="tour-actions"><button className="text-button" onClick={onSkip}>Skip tour</button><span /><button className="secondary" onClick={onBack} disabled={step===0}>Back</button><button className="primary" ref={nextRef} onClick={onNext}>{last?"Finish":"Next"}</button></div>
     </section>
@@ -105,7 +140,16 @@ export default function LearnadeApp() {
   const [theme,setTheme]=useState<Theme>("light");
   const [profileOpen,setProfileOpen]=useState(false);
   const [tourStep,setTourStep]=useState<number|null>(null);
+  const [tourSequence,setTourSequence]=useState<readonly GuidedTourStep[]>([]);
+  const [tourReturnFocusTarget,setTourReturnFocusTarget]=useState<HTMLElement|null>(null);
   const profileRef=useRef<HTMLDivElement|null>(null);
+  const menuTriggerRef=useRef<HTMLButtonElement|null>(null);
+
+  const launchTour=useCallback((returnFocusTarget?:HTMLElement|null)=>{
+    setTourReturnFocusTarget(returnFocusTarget||null);
+    const available=availableGuidedTourSteps(tourSteps,target=>Boolean(document.querySelector(target)));
+    setTourSequence(available);setTourStep(available.length?0:null);
+  },[]);
 
   useEffect(()=>{const timer=setTimeout(()=>{const stored=localStorage.getItem("learnade-theme");setTheme(stored==="dark"||(!stored&&window.matchMedia("(prefers-color-scheme: dark)").matches)?"dark":"light")},0);return()=>clearTimeout(timer)},[]);
   const toggleTheme=()=>setTheme(current=>{const next=current==="light"?"dark":"light";localStorage.setItem("learnade-theme",next);return next});
@@ -124,17 +168,12 @@ export default function LearnadeApp() {
       if(!parsed.length){try{const legacy=JSON.parse(localStorage.getItem("learnade-library")||"[]") as SavedCourse[];if(Array.isArray(legacy)){parsed=legacy;localStorage.removeItem("learnade-library")}}catch{}}
       let normalized=parsed.map(normalizeCourse);
       const demoVersion="4";
-      if(!normalized.length&&localStorage.getItem("learnade-demo-library-seeded")!=="1"){
-        const created=await Promise.all(DEMO_COURSES.map(demo=>createDemoCourse(demo.id)));
-        normalized=created.map(normalizeCourse);
-        localStorage.setItem("learnade-demo-library-seeded","1");
-      }
       if(localStorage.getItem("learnade-demo-content-version")!==demoVersion){
-        const refreshed=await Promise.all(DEMO_COURSES.map(demo=>createDemoCourse(demo.id)));
+        const existingDemoIds=DEMO_COURSE_IDS.filter(id=>normalized.some(course=>course.id===id));
+        const refreshed=await Promise.all(existingDemoIds.map(createDemoCourse));
         const refreshedById=new Map(refreshed.map(course=>[course.id,normalizeCourse(course)]));
         normalized=normalized.map(course=>refreshedById.get(course.id)||course);
-        for(const course of refreshedById.values())if(!normalized.some(item=>item.id===course.id))normalized.push(course);
-        DEMO_COURSE_IDS.forEach(id=>["learnade-card-srs-","learnade-custom-cards-","learnade-cards-","learnade-quiz-","learnade-exam-","learnade-mastery-","learnade-diagnostic-"].forEach(prefix=>localStorage.removeItem(`${prefix}${id}`)));
+        existingDemoIds.forEach(id=>["learnade-card-srs-","learnade-custom-cards-","learnade-cards-","learnade-quiz-","learnade-exam-","learnade-mastery-","learnade-diagnostic-"].forEach(prefix=>localStorage.removeItem(`${prefix}${id}`)));
         localStorage.setItem("learnade-demo-content-version",demoVersion);
       }
       await Promise.all(normalized.map(saveLibraryItem));      const sorted=normalized.sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)); setLibrary(sorted); if(sorted[0]) { setSource(sorted[0].source); setTitle(sorted[0].title); setLearningPackage(sorted[0].package); setActiveId(sorted[0].id); }
@@ -143,9 +182,9 @@ export default function LearnadeApp() {
 
   useEffect(()=>{
     if(!libraryLoaded||localStorage.getItem("learnade-tour-complete")==="2")return;
-    const timer=window.setTimeout(()=>setTourStep(0),500);
+    const timer=window.setTimeout(launchTour,500);
     return()=>window.clearTimeout(timer);
-  },[libraryLoaded]);
+  },[libraryLoaded,launchTour]);
 
   const activateCourse=(item:SavedCourse,nextMode:Mode="dashboard")=>{setSource(item.source);setTitle(item.title);setLearningPackage(item.package);setActiveId(item.id);setMode(nextMode)};
   const persistCourse=async(item:SavedCourse,activate=true)=>{setSaved(false);setLibrary(items=>[item,...items.filter(course=>course.id!==item.id)].sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)));if(activate)activateCourse(item,"dashboard");await saveLibraryItem(item);setSaved(true)};
@@ -170,8 +209,9 @@ export default function LearnadeApp() {
   const openProfileMode=(nextMode:Mode)=>{setProfileOpen(false);setMode(nextMode)};
 
   const finishTour=()=>{localStorage.setItem("learnade-tour-complete","2");setTourStep(null)};
-  const startTour=()=>{setProfileOpen(false);setTourStep(0)};
-  const advanceTour=()=>{if(tourStep===null)return;if(tourStep===tourSteps.length-1){finishTour();return;}setTourStep(tourStep+1)};
+  const startTour=()=>{const returnFocusTarget=menuTriggerRef.current;setProfileOpen(false);window.setTimeout(()=>launchTour(returnFocusTarget),0)};
+  const advanceTour=()=>{if(tourStep===null)return;if(tourStep===tourSequence.length-1){finishTour();return;}setTourStep(tourStep+1)};
+  const skipUnavailableTourStep=()=>{if(tourStep===null)return;if(tourSequence.length<=1){finishTour();return;}setTourSequence(current=>current.filter((_item,index)=>index!==tourStep));setTourStep(current=>current===null?null:Math.min(current,Math.max(0,tourSequence.length-2)))};
   if (mode !== "home") {
     const studyMaterials=activeCourse?.materials||[{id:"demo-material",title,source,createdAt:new Date(0).toISOString(),kind:"pasted" as const,package:learningPackage,preserveIds:true}];
     return <StudyMode mode={mode} theme={theme} onToggleTheme={toggleTheme} title={title} source={source} materials={studyMaterials} learningPackage={learningPackage} learnadeId={activeId} onChangeMode={setMode} onBack={() => setMode("home")} onManage={()=>{setMode("home");if(activeCourse)setManageCourseId(activeCourse.id);else setUploadTarget({})}} />;
@@ -193,7 +233,7 @@ export default function LearnadeApp() {
           <ThemeToggle theme={theme} onToggle={toggleTheme}/>
           <div className="profile" ref={profileRef}>
             <span className="save-status"><span className="save-dot" /> {saved ? "Saved locally" : "Saving…"}</span>
-            <button className="avatar" data-tour="menu" onClick={()=>setProfileOpen(open=>!open)} aria-label="Open learning menu" aria-haspopup="menu" aria-expanded={profileOpen}><span className="profile-icon" aria-hidden="true" /></button>
+            <button ref={menuTriggerRef} className="avatar" data-tour="menu" onClick={()=>setProfileOpen(open=>!open)} aria-label="Open learning menu" aria-haspopup="menu" aria-expanded={profileOpen}><span className="profile-icon" aria-hidden="true" /></button>
             {profileOpen&&<div className="profile-menu" role="menu" aria-label="Learning menu">
               <div className="profile-menu-heading"><strong>My Learnade</strong><span>{library.length} {library.length===1?"course":"courses"} saved on this browser</span></div>
               <div className="profile-menu-group">
@@ -245,7 +285,7 @@ export default function LearnadeApp() {
       <section className={`continue-card ${!activeCourse?"sample-continue":""}`} data-tour="dashboard">
         <div className="material-icon">{activeCourse?"☀":"◎"}</div>
         <div className="material-copy">{!libraryLoaded?<><span className="eyebrow">LOADING</span><h2>Opening your learning library…</h2></>:activeCourse?<><span className="eyebrow">CONTINUE LEARNING</span><h2>{title}</h2><p>{activeCourse.materials.length} source {activeCourse.materials.length===1?"item":"items"} · {modes.length} learning modes ready</p></>:<><span className="eyebrow">60-SECOND PRODUCT TOUR</span><h2>See a complete Learnade course</h2><p>Open a safe sample with readings, lecture notes, flashcards, quizzes, and mock exams.</p></>}</div>
-        {activeCourse&&<><div className="progress-copy"><strong>{learningPackage.sections.length}</strong><span>sections</span></div><div className="progress-track"><i /></div></>}
+        {activeCourse&&<div className="progress-copy"><strong>{learningPackage.sections.length}</strong><span>source sections</span></div>}
         {libraryLoaded&&<button className="round-button" onClick={() => activeCourse?setMode("dashboard"):void openSample()} aria-label={activeCourse?"Open course dashboard":"Explore sample course"}>→</button>}
       </section>
 
@@ -260,8 +300,8 @@ export default function LearnadeApp() {
         </div>
       </section>
 
-      <section className="library-section" id="library" data-tour="library">
-        <div className="section-heading"><div><span className="eyebrow">SAVED ON THIS DEVICE</span><h2>My learning library</h2></div><p>Your documents and progress stay in this browser.</p></div>
+      <section className="library-section" id="library">
+        <div className="section-heading"><div data-tour="library"><span className="eyebrow">SAVED ON THIS DEVICE</span><h2>My learning library</h2></div><p>Your documents and progress stay in this browser.</p></div>
         {libraryLoaded&&library.length === 0 ? <div className="library-empty"><strong>Your first course will appear here.</strong><p>Create one from your own material, or explore a complete sample first.</p><div className="empty-actions"><button className="primary" onClick={()=>void openSample()}>Explore sample course</button><button className="secondary" onClick={()=>setUploadTarget({})}>Create my own</button></div></div> : <div className="library-grid">{library.map(item=><article key={item.id}><button className="library-open" onClick={()=>openItem(item)}><span className="material-icon">L</span><span><small>{item.id===SAMPLE_COURSE_ID?"READY-MADE DEMO":`UPDATED ${new Date(item.updatedAt).toLocaleDateString()}`}</small><strong>{item.title}</strong><em>{item.materials.length} {item.materials.length===1?"source":"sources"} · {item.package.flashcards.length} cards</em></span></button><div className="course-actions"><button onClick={()=>setUploadTarget({courseId:item.id})}>＋ Material</button><button onClick={()=>setRecordTarget({courseId:item.id})}>● Lecture</button><button onClick={()=>setManageCourseId(item.id)}>Manage</button></div><button className="delete-item" onClick={()=>deleteItem(item.id)} aria-label={`Delete ${item.title}`}>×</button></article>)}</div>}
       </section>
 
@@ -269,7 +309,7 @@ export default function LearnadeApp() {
       {recordTarget && <LectureRecorderModal courses={library} defaultCourseId={recordTarget.courseId} onClose={()=>setRecordTarget(null)} onSave={async(text,courseTitle,lectureTitle,courseId,audio)=>{await saveMaterial(text,courseTitle,lectureTitle,"lecture",undefined,courseId,audio);setRecordTarget(null)}} />}
       {audioUploadTarget && <AudioUploadModal courses={library} defaultCourseId={audioUploadTarget.courseId} onClose={()=>setAudioUploadTarget(null)} onSave={async(text,courseTitle,lectureTitle,courseId,audio)=>{await saveMaterial(text,courseTitle,lectureTitle,"lecture",undefined,courseId,audio);setAudioUploadTarget(null)}} />}
       {manageCourseId && library.find(item=>item.id===manageCourseId) && <ManageCourseModal course={library.find(item=>item.id===manageCourseId)!} onClose={()=>setManageCourseId(null)} onRename={updateCourseName} onDeleteMaterial={deleteMaterial} onAddMaterial={()=>{setManageCourseId(null);setUploadTarget({courseId:manageCourseId})}} onRecord={()=>{setManageCourseId(null);setRecordTarget({courseId:manageCourseId})}} onUploadAudio={()=>{setManageCourseId(null);setAudioUploadTarget({courseId:manageCourseId})}} onExam={()=>{const course=library.find(item=>item.id===manageCourseId);setManageCourseId(null);if(course)activateCourse(course,"exam")}} onRegenerate={()=>void regenerateCourse(manageCourseId)} onEnhance={(materialId,engine)=>enhanceMaterial(manageCourseId,materialId,engine)} />}
-      {tourStep!==null&&<GuidedTour step={tourStep} onBack={()=>setTourStep(current=>current===null?null:Math.max(0,current-1))} onNext={advanceTour} onSkip={finishTour}/>}
+      {tourStep!==null&&tourSequence[tourStep]&&<GuidedTour steps={tourSequence} step={tourStep} onBack={()=>setTourStep(current=>current===null?null:Math.max(0,current-1))} onNext={advanceTour} onSkip={finishTour} onUnavailable={skipUnavailableTourStep} returnFocusTarget={tourReturnFocusTarget}/>}
     </main>
   );
 }
