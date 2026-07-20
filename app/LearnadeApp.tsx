@@ -40,10 +40,16 @@ const modes = [
 
 const tourSteps = [
   { target:"[data-tour='welcome']", eyebrow:"WELCOME TO LEARNADE", title:"One course, many ways to learn.", text:"Learnade turns the same class material into study experiences that fit the way you want to learn today." },
-  { target:"[data-tour='dashboard']", eyebrow:"START HERE", title:"Your course dashboard keeps the next step clear.", text:"Use it to see progress, what needs review, and the best place to pick up without figuring it all out again." },
+  { target:"[data-tour='course-dashboard']", eyebrow:"ADAPTIVE LEARNING", title:"Learnade learns from how you study.", text:"It remembers results from diagnostics, flashcards, quizzes, and mock exams. That progress shapes your recommendations, returns weak concepts, and schedules cards for review." },
   { target:"[data-tour='study-plan']", eyebrow:"PERSONALIZED PLAN", title:"Begin with a quick check, then follow a focused plan.", text:"My Study Plan identifies the concepts that need attention and gives you a manageable place to begin." },
   { target:"[data-tour='accessible-reader']", eyebrow:"READ YOUR WAY", title:"Adjust reading instead of forcing your way through it.", text:"Accessible Reader lets you tune type, spacing, contrast, and line focus. It is there whenever dense text makes starting harder." },
-  { target:"[data-tour='practice']", eyebrow:"PRACTICE AND IMPROVE", title:"Use active practice to find what is sticking.", text:"Flashcards, quizzes, and mock exams show what needs another pass, then bring those concepts back into your next study session." },
+  { target:"[data-tour='speed-reader']", eyebrow:"SPEED READER", title:"Keep your eyes in one place.", text:"Speed Reader shows one centered word at a time, with a pace you control. Use it for a fast pass through material after you understand the basics." },
+  { target:"[data-tour='brainrot']", eyebrow:"DUAL-STIMULATION MODE", title:"Listen with a visual anchor.", text:"Brainrot Mode combines narration, captions, and an optional visual loop. It is a flexible way to revisit material when listening helps you stay engaged." },
+  { target:"[data-tour='focus-session']", eyebrow:"FOCUS SESSION", title:"Turn a big study task into small steps.", text:"Choose your time and energy, then work through one manageable chunk at a time with breaks and a clear restart point." },
+  { target:"[data-tour='study-guide']", eyebrow:"STUDY GUIDE", title:"See the structure before you study the details.", text:"Use the guide to review objectives, key terms, relationships, and likely test material from the source itself." },
+  { target:"[data-tour='flashcards']", eyebrow:"FLASHCARDS", title:"Practice what is not sticking yet.", text:"Mark a card Not Yet and it comes back sooner. Got it cards return later, so review time stays centered on what you need." },
+  { target:"[data-tour='quiz']", eyebrow:"PRACTICE QUIZ", title:"Check understanding with explanations.", text:"Quiz results update concept mastery and point you back to the supporting source passage, not just a score." },
+  { target:"[data-tour='mock-exam']", eyebrow:"MOCK EXAM", title:"Practice the test you are actually preparing for.", text:"Build an exam from selected course materials, review missed concepts, and retake only the areas that need another pass." },
   { target:"[data-tour='library']", eyebrow:"YOUR LIBRARY", title:"Keep every class in one place.", text:"Add readings, slides, notes, or lecture recordings to a course. Your material and progress stay on this device." },
 ] as const;
 
@@ -126,7 +132,7 @@ export default function LearnadeApp() {
   }, []);
 
   useEffect(()=>{
-    if(!libraryLoaded||localStorage.getItem("learnade-tour-complete")==="1")return;
+    if(!libraryLoaded||localStorage.getItem("learnade-tour-complete")==="2")return;
     const timer=window.setTimeout(()=>setTourStep(0),500);
     return()=>window.clearTimeout(timer);
   },[libraryLoaded]);
@@ -152,7 +158,7 @@ export default function LearnadeApp() {
   const openLibrary=()=>{setProfileOpen(false);requestAnimationFrame(()=>document.getElementById("library")?.scrollIntoView({behavior:"smooth"}))};
   const openProfileMode=(nextMode:Mode)=>{setProfileOpen(false);setMode(nextMode)};
 
-  const finishTour=()=>{localStorage.setItem("learnade-tour-complete","1");setTourStep(null)};
+  const finishTour=()=>{localStorage.setItem("learnade-tour-complete","2");setTourStep(null)};
   const startTour=()=>{setProfileOpen(false);setTourStep(0)};
   const advanceTour=()=>{if(tourStep===null)return;if(tourStep===tourSteps.length-1){finishTour();return;}setTourStep(tourStep+1)};
   if (mode !== "home") {
@@ -234,7 +240,7 @@ export default function LearnadeApp() {
         <div className="section-heading"><div><span className="eyebrow">CHOOSE WHAT WORKS NOW</span><h2>How do you want to learn?</h2></div><p>You can switch modes anytime. No setup, no penalty.</p></div>
         <div className="mode-grid">
           {modes.map((item, index) => (
-            <button className={`mode-card mode-${(index % 7) + 1}`} key={item.id} data-tour={item.id==="plan"?"study-plan":item.id==="reader"?"accessible-reader":item.id==="cards"?"practice":undefined} aria-label={item.title} onClick={() => setMode(item.id)}>
+            <button className={`mode-card mode-${(index % 7) + 1}`} key={item.id} data-tour={item.id==="dashboard"?"course-dashboard":item.id==="plan"?"study-plan":item.id==="reader"?"accessible-reader":item.id==="speed"?"speed-reader":item.id==="brainrot"?"brainrot":item.id==="focus"?"focus-session":item.id==="guide"?"study-guide":item.id==="cards"?"flashcards":item.id==="quiz"?"quiz":item.id==="exam"?"mock-exam":undefined} aria-label={item.title} onClick={() => setMode(item.id)}>
               <span className="mode-icon" aria-hidden="true">{item.icon}</span><span><strong>{item.title}</strong><small>{item.text}</small></span><b aria-hidden="true">↗</b>
             </button>
           ))}
