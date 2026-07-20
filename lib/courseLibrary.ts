@@ -9,6 +9,7 @@ export type CourseMaterial = {
   kind: MaterialKind;
   package: LearningPackage;
   preserveIds?: boolean;
+  generation?: { mode: "local" | "on-device-ai"; generatedAt: string };
   audio?: { id: string; mimeType: string; size: number; durationMs: number };
 };
 

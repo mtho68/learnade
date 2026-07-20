@@ -33,7 +33,7 @@ export async function generateWithBrowserAI(textSource:string,title:string,onPro
   const generator=await loadGenerator(onProgress);
   onProgress("The on-device AI is building grounded study materials…");
   const source=textSource.replace(/\s+/g," ").slice(0,12000);
-  const prompt=`Create study materials using ONLY the source. Return JSON with keys overview (string), objectives (string[]), keyTerms ({term,definition}[]), flashcards ({front,back}[]), quiz ({prompt,options:string[4],answer:number,explanation}[]), narration (string). Make 5-8 terms/cards and 5 quiz questions. answer is a zero-based option index. No markdown.\nTITLE: ${title}\nSOURCE: ${source}`;
+  const prompt=`Create study materials using ONLY the source. Return JSON with keys overview (string), objectives (string[]), keyTerms ({term,definition}[]), flashcards ({front,back}[]), quiz ({prompt,options:string[4],answer:number,explanation}[]), narration (string). Make 5-8 concise, standalone academic terms/cards and 5 quiz questions. A card front must be a specific named concept, never a sentence fragment, generic phrase, ordinal fact, or phrase such as “understanding these factors.” A definition must make sense without surrounding context. answer is a zero-based option index. No markdown.\nTITLE: ${title}\nSOURCE: ${source}`;
   const result=await generator([{role:"user",content:prompt}],{max_new_tokens:1400,do_sample:false});
   const first=Array.isArray(result)&&isRecord(result[0])?result[0]:{};
   const generated=first.generated_text;
@@ -46,9 +46,10 @@ export async function generateWithBrowserAI(textSource:string,title:string,onPro
     const ranked=base.sections.map(section=>({section,score:[...tokens].filter(token=>section.text.toLowerCase().includes(token)).length})).sort((a,b)=>b.score-a.score);
     return ranked[0]?.score>=2?ranked[0].section:undefined;
   };
-  const terms=records(ai.keyTerms).filter(value=>text(value.term)&&text(value.definition)).slice(0,10);
-  const cards=records(ai.flashcards).filter(value=>text(value.front)&&text(value.back)).slice(0,10);
-  const quiz=records(ai.quiz).filter(value=>Array.isArray(value.options)&&value.options.length===4&&value.options.every(option=>typeof option==="string")&&Number.isInteger(value.answer)&&Number(value.answer)>=0&&Number(value.answer)<4&&text(value.prompt)).slice(0,8);
+  const usefulTerm=(value:string)=>{const clean=value.trim();return clean.length>=3&&clean.length<=48&&!/^(understanding|these factors|factors|this|that|it|response|signal|result|process|system)$/i.test(clean)&&!/\b(second|third|major factor|these factors)\b/i.test(clean)};
+  const usefulDefinition=(value:string)=>value.trim().length>=12&&!/\b(second|third|major factor)\b/i.test(value);
+  const terms=records(ai.keyTerms).filter(value=>usefulTerm(text(value.term))&&usefulDefinition(text(value.definition))).slice(0,10);
+  const cards=records(ai.flashcards).filter(value=>usefulTerm(text(value.front))&&usefulDefinition(text(value.back))).slice(0,10);  const quiz=records(ai.quiz).filter(value=>Array.isArray(value.options)&&value.options.length===4&&value.options.every(option=>typeof option==="string")&&Number.isInteger(value.answer)&&Number(value.answer)>=0&&Number(value.answer)<4&&text(value.prompt)).slice(0,8);
   const objectives=Array.isArray(ai.objectives)?ai.objectives.filter((value):value is string=>typeof value==="string"&&Boolean(value.trim())).slice(0,6):[];
   return {...base,
     overview:text(ai.overview)||base.overview,

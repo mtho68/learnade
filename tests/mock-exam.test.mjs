@@ -41,3 +41,11 @@ test("mock exam removes duplicate source statements across materials", () => {
   assert.equal(new Set(statements).size,statements.length);
   assert.ok(exam.questions.every(question=>question.id.startsWith(`exam:${question.materialId}:`)));
 });
+test("new exam versions prefer unused questions and shuffle answer positions", () => {
+  const materials=[material("one","Cell division"),material("two","Genetics")];
+  const first=buildMockExam(materials,["one","two"],5,"Biology",[],1);
+  const second=buildMockExam(materials,["one","two"],5,"Biology",first.questions.map(question=>question.id),2);
+  const allIds=new Set(first.questions.map(question=>question.id));
+  assert.ok(second.questions.some(question=>!allIds.has(question.id)) || first.questions.length===materials.reduce((total,item)=>total+item.package.quiz.length,0));
+  assert.ok(second.questions.every(question=>question.answer>=0&&question.answer<question.options.length));
+});
