@@ -10,7 +10,7 @@ import { masteryPercent, recordAnswer, scheduleCard, type CardReview, type Secti
 import { addCourseMaterial, combineCourseMaterials, courseSource, normalizeCourse, removeCourseMaterial, renameCourse, type CourseMaterial, type MaterialKind, type SavedCourse } from "../lib/courseLibrary";
 import { buildMockExam, gradeMockExam, type MockExam as MockExamData } from "../lib/mockExam";
 import { buildDashboardSnapshot, type AttemptSummary, type DashboardSnapshot } from "../lib/courseDashboard";
-import { createDemoCourse, DEMO_COURSES, SAMPLE_COURSE_ID } from "../lib/sampleCourse";
+import { createDemoCourse, DEMO_COURSES, DEMO_COURSE_IDS, SAMPLE_COURSE_ID } from "../lib/sampleCourse";
 
 type Mode = "home" | "dashboard" | "plan" | "reader" | "speed" | "focus" | "brainrot" | "guide" | "cards" | "quiz" | "exam";
 type Theme = "light" | "dark";
@@ -119,15 +119,21 @@ export default function LearnadeApp() {
     loadLibrary<SavedCourse>().then(async parsed => {
       if(!parsed.length){try{const legacy=JSON.parse(localStorage.getItem("learnade-library")||"[]") as SavedCourse[];if(Array.isArray(legacy)){parsed=legacy;localStorage.removeItem("learnade-library")}}catch{}}
       let normalized=parsed.map(normalizeCourse);
+      const demoVersion="3";
       if(!normalized.length&&localStorage.getItem("learnade-demo-library-seeded")!=="1"){
         const created=await Promise.all(DEMO_COURSES.map(demo=>createDemoCourse(demo.id)));
         normalized=created.map(normalizeCourse);
-        await Promise.all(normalized.map(saveLibraryItem));
         localStorage.setItem("learnade-demo-library-seeded","1");
-      }else{
-        await Promise.all(normalized.map(saveLibraryItem));
       }
-      const sorted=normalized.sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)); setLibrary(sorted); if(sorted[0]) { setSource(sorted[0].source); setTitle(sorted[0].title); setLearningPackage(sorted[0].package); setActiveId(sorted[0].id); }
+      if(localStorage.getItem("learnade-demo-content-version")!==demoVersion){
+        const refreshed=await Promise.all(DEMO_COURSES.map(demo=>createDemoCourse(demo.id)));
+        const refreshedById=new Map(refreshed.map(course=>[course.id,normalizeCourse(course)]));
+        normalized=normalized.map(course=>refreshedById.get(course.id)||course);
+        for(const course of refreshedById.values())if(!normalized.some(item=>item.id===course.id))normalized.push(course);
+        DEMO_COURSE_IDS.forEach(id=>["learnade-card-srs-","learnade-custom-cards-","learnade-cards-","learnade-quiz-","learnade-exam-","learnade-mastery-","learnade-diagnostic-"].forEach(prefix=>localStorage.removeItem(`${prefix}${id}`)));
+        localStorage.setItem("learnade-demo-content-version",demoVersion);
+      }
+      await Promise.all(normalized.map(saveLibraryItem));      const sorted=normalized.sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)); setLibrary(sorted); if(sorted[0]) { setSource(sorted[0].source); setTitle(sorted[0].title); setLearningPackage(sorted[0].package); setActiveId(sorted[0].id); }
     }).catch(()=>setSaved(false)).finally(()=>setLibraryLoaded(true));
   }, []);
 

@@ -14,8 +14,8 @@ export type LearningPackage = {
 
 type Candidate = { term: string; normalized: string; definition: string; sourceSection: string; score: number; order: number };
 
-const STOP = new Set("about after again against also alongside although among another because been before being between both could despite does doing down during each from further furthermore have having here however including instead into itself just moreover more most nevertheless only onto other otherwise over same should some such than that their them then there therefore these they this those throughout through toward towards under unless very was were what when where whereas whether which while will with within without would your notes lecture chapter section page slide using used uses much many are has had its our out how why who can may might must and but for not you the she him her his ours theirs called calleds body course source material information knowledge idea concept system process function structure method example layer means thing things study learning explain explained explains explains".split(" "));
-const GENERIC = new Set("body course source material information knowledge idea concept system process function structure method example layer thing things study learning student students".split(" "));
+const STOP = new Set("about after again against also alongside although among another because been before being between both could despite does doing down during each from further furthermore have having here however including instead into itself just moreover more most nevertheless only onto other otherwise over same should some such than that their them then there therefore these they this those throughout through toward towards under unless very was were what when where whereas whether which while will with within without would your notes lecture chapter section page slide using used uses much many are has had its our out how why who can may might must and but for not you the she him her his ours theirs called calleds it its this these that those they them he she body course source material information knowledge idea concept system process function structure method example layer means thing things study learning explain explained explains explains".split(" "));
+const GENERIC = new Set("it its this these that those they them he she body course source material information knowledge idea concept system process function structure method example layer thing things study learning student students".split(" "));
 const sentences = (text: string) => text.replace(/\s+/g, " ").split(/(?<=[.!?])\s+/).map((s) => s.trim()).filter(Boolean);
 const short = (value: string, length = 170) => value.length <= length ? value : `${value.slice(0, length).replace(/\s+\S*$/, "")}…`;
 const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -37,7 +37,7 @@ function collectCandidates(sections: LearningSection[]) {
   let order = 0;
   const add = (term: string, definition: string, sourceSection: string, score: number) => {
     const cleaned = cleanTerm(term); const normalized = normalize(cleaned);
-    if (!validTerm(cleaned) || !definition.toLowerCase().includes(normalized)) return;
+    if (!validTerm(cleaned) || /^(it|this|these|that|those|they|he|she)\b/i.test(definition) || !definition.toLowerCase().includes(normalized)) return;
     const current = candidates.get(normalized);
     const next = { term: cleaned, normalized, definition: short(definition, 220), sourceSection, score, order: order += 1 };
     if (!current || next.score > current.score || (next.score === current.score && next.order < current.order)) candidates.set(normalized, next);

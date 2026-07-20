@@ -67,3 +67,11 @@ test("records concept-level mastery without losing other sections",()=>{
   assert.deepEqual(state["section-1"],{correct:1,attempts:2});
   assert.equal(masteryPercent(state,["section-1","section-2"]),75);
 });
+test("rejects pronouns and filler verbs as study terms",()=>{
+  const source="The cardiovascular system consists of the heart, blood vessels, and blood. It consists of connected organs. The two upper chambers are called atria, and the two lower chambers are called ventricles. Arteries carry blood away from the heart. Veins return blood to the heart.";
+  const result=generateLocalLearningPackage(source,"Cardiovascular system");
+  const terms=result.keyTerms.map(item=>item.term.toLowerCase());
+  assert.ok(!terms.includes("it"));
+  assert.ok(!terms.includes("called"));
+  assert.ok(result.quiz.every(question=>!question.prompt.includes("“It ")));
+});
