@@ -51,9 +51,20 @@ export default function LearnadeApp() {
   const [saved, setSaved] = useState(true);
   const [libraryLoaded,setLibraryLoaded]=useState(false);
   const [theme,setTheme]=useState<Theme>("light");
+  const [profileOpen,setProfileOpen]=useState(false);
+  const profileRef=useRef<HTMLDivElement|null>(null);
 
   useEffect(()=>{const timer=setTimeout(()=>{const stored=localStorage.getItem("learnade-theme");setTheme(stored==="dark"||(!stored&&window.matchMedia("(prefers-color-scheme: dark)").matches)?"dark":"light")},0);return()=>clearTimeout(timer)},[]);
   const toggleTheme=()=>setTheme(current=>{const next=current==="light"?"dark":"light";localStorage.setItem("learnade-theme",next);return next});
+
+  useEffect(()=>{
+    if(!profileOpen)return;
+    const closeOutside=(event:MouseEvent)=>{if(!profileRef.current?.contains(event.target as Node))setProfileOpen(false)};
+    const closeWithKeyboard=(event:KeyboardEvent)=>{if(event.key==="Escape")setProfileOpen(false)};
+    document.addEventListener("mousedown",closeOutside);
+    document.addEventListener("keydown",closeWithKeyboard);
+    return()=>{document.removeEventListener("mousedown",closeOutside);document.removeEventListener("keydown",closeWithKeyboard)};
+  },[profileOpen]);
 
   useEffect(() => {
     loadLibrary<SavedCourse>().then(async parsed => {
@@ -80,6 +91,8 @@ export default function LearnadeApp() {
   const deleteMaterial=async(courseId:string,materialId:string)=>{const course=library.find(item=>item.id===courseId);if(!course)return;if(course.materials.length===1){await deleteItem(courseId);setManageCourseId(null);return}if(!confirm("Remove this material from the course? Existing study progress for other materials will stay saved."))return;const material=course.materials.find(item=>item.id===materialId);const updated=removeCourseMaterial(course,materialId);if(material?.audio)await deleteLectureAudio(material.audio.id);localStorage.removeItem(`learnade-diagnostic-${courseId}`);await persistCourse(updated,false);if(activeId===courseId){setSource(updated.source);setTitle(updated.title);setLearningPackage(updated.package)}};
   const activeCourse=library.find(item=>item.id===activeId);
   const openSample=async()=>{const existing=library.find(item=>item.id===SAMPLE_COURSE_ID);if(existing){activateCourse(existing,"dashboard");return}const sample=createSampleCourse();try{await persistCourse(sample,false);activateCourse(sample,"dashboard")}catch{setSaved(false)}};
+  const openLibrary=()=>{setProfileOpen(false);requestAnimationFrame(()=>document.getElementById("library")?.scrollIntoView({behavior:"smooth"}))};
+  const openProfileMode=(nextMode:Mode)=>{setProfileOpen(false);setMode(nextMode)};
 
   if (mode !== "home") {
     const studyMaterials=activeCourse?.materials||[{id:"demo-material",title,source,createdAt:new Date(0).toISOString(),kind:"pasted" as const,package:learningPackage,preserveIds:true}];
@@ -97,7 +110,31 @@ export default function LearnadeApp() {
           <button className="nav-link" onClick={() => setUploadTarget({})}>New course</button>
           <button className="nav-link" onClick={() => setRecordTarget({})}>Record lecture</button>
         </nav>
-        <div className="header-actions"><ThemeToggle theme={theme} onToggle={toggleTheme}/><div className="profile"><span className="save-dot" /> {saved ? "Saved locally" : "Saving…"}<span className="avatar" aria-hidden="true">L</span></div></div>
+        <div className="header-actions">
+          <ThemeToggle theme={theme} onToggle={toggleTheme}/>
+          <div className="profile" ref={profileRef}>
+            <span className="save-status"><span className="save-dot" /> {saved ? "Saved locally" : "Saving…"}</span>
+            <button className="avatar" onClick={()=>setProfileOpen(open=>!open)} aria-label="Open my Learnade menu" aria-haspopup="menu" aria-expanded={profileOpen}>L</button>
+            {profileOpen&&<div className="profile-menu" role="menu" aria-label="My Learnade">
+              <div className="profile-menu-heading"><strong>My Learnade</strong><span>{library.length} {library.length===1?"course":"courses"} saved on this browser</span></div>
+              <div className="profile-menu-group">
+                <button role="menuitem" onClick={openLibrary}><span aria-hidden="true">▦</span><span><strong>My courses</strong><small>Open your learning library</small></span></button>
+                <button role="menuitem" onClick={()=>{setProfileOpen(false);setRecordTarget(activeCourse?{courseId:activeCourse.id}:{})}}><span aria-hidden="true">●</span><span><strong>Record a lecture</strong><small>{activeCourse?`Add to ${activeCourse.title}`:"Choose or create a course"}</small></span></button>
+                <button role="menuitem" onClick={()=>{setProfileOpen(false);setUploadTarget({})}}><span aria-hidden="true">＋</span><span><strong>Create a course</strong><small>Upload or paste new material</small></span></button>
+              </div>
+              {activeCourse&&<div className="profile-course">
+                <span>CURRENT COURSE</span><strong>{activeCourse.title}</strong>
+                <div className="profile-course-links">
+                  <button role="menuitem" onClick={()=>openProfileMode("dashboard")}>Dashboard</button>
+                  <button role="menuitem" onClick={()=>openProfileMode("cards")}>Flashcards</button>
+                  <button role="menuitem" onClick={()=>openProfileMode("quiz")}>Quiz</button>
+                  <button role="menuitem" onClick={()=>openProfileMode("exam")}>Mock exam</button>
+                </div>
+                <button className="profile-manage" role="menuitem" onClick={()=>{setProfileOpen(false);setManageCourseId(activeCourse.id)}}>Manage course and materials →</button>
+              </div>}
+            </div>}
+          </div>
+        </div>
       </header>
 
       <section className="hero">
