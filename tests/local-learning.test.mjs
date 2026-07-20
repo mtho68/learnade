@@ -75,3 +75,11 @@ test("rejects pronouns and filler verbs as study terms",()=>{
   assert.ok(!terms.includes("called"));
   assert.ok(result.quiz.every(question=>!question.prompt.includes("“It ")));
 });
+test("prefers the named concept over a vague word in a definition",()=>{
+  const source="A control center, often the brain, compares the signal to the set point and decides on a response. A receptor detects a change and sends information to the control center. An effector carries out the correction.";
+  const result=generateLocalLearningPackage(source,"Homeostasis");
+  const terms=result.keyTerms.map(item=>item.term.toLowerCase());
+  assert.ok(terms.includes("control center"));
+  assert.ok(!terms.includes("response"));
+  assert.ok(!terms.includes("signal"));
+});

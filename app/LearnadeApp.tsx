@@ -119,7 +119,7 @@ export default function LearnadeApp() {
     loadLibrary<SavedCourse>().then(async parsed => {
       if(!parsed.length){try{const legacy=JSON.parse(localStorage.getItem("learnade-library")||"[]") as SavedCourse[];if(Array.isArray(legacy)){parsed=legacy;localStorage.removeItem("learnade-library")}}catch{}}
       let normalized=parsed.map(normalizeCourse);
-      const demoVersion="3";
+      const demoVersion="4";
       if(!normalized.length&&localStorage.getItem("learnade-demo-library-seeded")!=="1"){
         const created=await Promise.all(DEMO_COURSES.map(demo=>createDemoCourse(demo.id)));
         normalized=created.map(normalizeCourse);
