@@ -69,7 +69,15 @@ export default function LearnadeApp() {
   useEffect(() => {
     loadLibrary<SavedCourse>().then(async parsed => {
       if(!parsed.length){try{const legacy=JSON.parse(localStorage.getItem("learnade-library")||"[]") as SavedCourse[];if(Array.isArray(legacy)){parsed=legacy;localStorage.removeItem("learnade-library")}}catch{}}
-      const normalized=parsed.map(normalizeCourse);await Promise.all(normalized.map(saveLibraryItem));
+      let normalized=parsed.map(normalizeCourse);
+      if(!normalized.length&&localStorage.getItem("learnade-demo-library-seeded")!=="1"){
+        const created=await Promise.all(DEMO_COURSES.map(demo=>createDemoCourse(demo.id)));
+        normalized=created.map(normalizeCourse);
+        await Promise.all(normalized.map(saveLibraryItem));
+        localStorage.setItem("learnade-demo-library-seeded","1");
+      }else{
+        await Promise.all(normalized.map(saveLibraryItem));
+      }
       const sorted=normalized.sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)); setLibrary(sorted); if(sorted[0]) { setSource(sorted[0].source); setTitle(sorted[0].title); setLearningPackage(sorted[0].package); setActiveId(sorted[0].id); }
     }).catch(()=>setSaved(false)).finally(()=>setLibraryLoaded(true));
   }, []);
@@ -115,8 +123,8 @@ export default function LearnadeApp() {
           <ThemeToggle theme={theme} onToggle={toggleTheme}/>
           <div className="profile" ref={profileRef}>
             <span className="save-status"><span className="save-dot" /> {saved ? "Saved locally" : "Saving…"}</span>
-            <button className="avatar" onClick={()=>setProfileOpen(open=>!open)} aria-label="Open my Learnade menu" aria-haspopup="menu" aria-expanded={profileOpen}>L</button>
-            {profileOpen&&<div className="profile-menu" role="menu" aria-label="My Learnade">
+            <button className="avatar" onClick={()=>setProfileOpen(open=>!open)} aria-label="Open learning menu" aria-haspopup="menu" aria-expanded={profileOpen}><span className="profile-icon" aria-hidden="true" /></button>
+            {profileOpen&&<div className="profile-menu" role="menu" aria-label="Learning menu">
               <div className="profile-menu-heading"><strong>My Learnade</strong><span>{library.length} {library.length===1?"course":"courses"} saved on this browser</span></div>
               <div className="profile-menu-group">
                 <button role="menuitem" onClick={openLibrary}><span aria-hidden="true">▦</span><span><strong>My courses</strong><small>Open your learning library</small></span></button>

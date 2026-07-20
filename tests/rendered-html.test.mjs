@@ -31,6 +31,7 @@ test("renders development preview metadata", async () => {
   );
   const html=await response.text();
   assert.match(html, developmentPreviewMeta);
+  assert.match(html,/Open learning menu/);
   assert.doesNotMatch(html,/Continue with OpenAI|signin-with-chatgpt/i);
   assert.match(html,/Switch to dark mode/i);
 });
