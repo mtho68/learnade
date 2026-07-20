@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { buildDashboardSnapshot } from "../lib/courseDashboard.ts";
-import { createSampleCourse, SAMPLE_COURSE_ID } from "../lib/sampleCourse.ts";
+import { createSampleCourse, DEMO_COURSES, SAMPLE_COURSE_ID } from "../lib/sampleCourse.ts";
 
 test("sample course demonstrates three grounded material types", () => {
   const course=createSampleCourse(new Date("2026-07-17T00:00:00.000Z"));
@@ -13,6 +13,14 @@ test("sample course demonstrates three grounded material types", () => {
   assert.ok(course.package.quiz.every(question=>sections.has(question.sourceSection)));
   assert.ok(!course.package.keyTerms.some(term=>term.term.toLowerCase()==="without"));
   course.materials.forEach(material=>assert.equal(new Set(material.package.quiz.map(question=>question.explanation.toLowerCase())).size,material.package.quiz.length));
+});
+
+test("offers two three-document demo courses without using the Photosynthesis test course", () => {
+  assert.equal(DEMO_COURSES.length,2);
+  assert.deepEqual(DEMO_COURSES.map(course=>course.title),["Demo Course: Anatomy & Physiology","Demo Course: Introduction to Computer Science"]);
+  assert.ok(DEMO_COURSES.every(course=>course.materials.length===3));
+  assert.ok(DEMO_COURSES.flatMap(course=>course.materials).every(material=>material.url.endsWith(".docx")));
+  assert.ok(DEMO_COURSES.flatMap(course=>course.materials).every(material=>!material.url.toLowerCase().includes("photosynthesis")));
 });
 
 test("dashboard calculates progress, due work, weak concepts, and a next action", () => {

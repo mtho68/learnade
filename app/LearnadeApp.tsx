@@ -10,12 +10,12 @@ import { masteryPercent, recordAnswer, scheduleCard, type CardReview, type Secti
 import { addCourseMaterial, combineCourseMaterials, courseSource, normalizeCourse, removeCourseMaterial, renameCourse, type CourseMaterial, type MaterialKind, type SavedCourse } from "../lib/courseLibrary";
 import { buildMockExam, gradeMockExam, type MockExam as MockExamData } from "../lib/mockExam";
 import { buildDashboardSnapshot, type AttemptSummary, type DashboardSnapshot } from "../lib/courseDashboard";
-import { createSampleCourse, SAMPLE_COURSE_ID } from "../lib/sampleCourse";
+import { createDemoCourse, DEMO_COURSES, SAMPLE_COURSE_ID } from "../lib/sampleCourse";
 
 type Mode = "home" | "dashboard" | "plan" | "reader" | "speed" | "focus" | "brainrot" | "guide" | "cards" | "quiz" | "exam";
 type Theme = "light" | "dark";
 
-const sampleText = `Photosynthesis is the process plants use to convert light energy into chemical energy. It occurs primarily in chloroplasts. During the light-dependent reactions, chlorophyll absorbs sunlight and helps produce ATP and NADPH. The Calvin cycle then uses that stored energy to convert carbon dioxide into glucose. Water is split during the light-dependent reactions, releasing oxygen as a byproduct. Temperature, light intensity, and carbon dioxide concentration can all affect the rate of photosynthesis.`;
+const sampleText = `Choose one of the ready-made demos or create a course from your own material to begin studying.`;
 
 function PlayIcon() { return <span className="media-icon play-icon" aria-hidden="true" />; }
 function PauseIcon() { return <span className="media-icon pause-icon" aria-hidden="true"><i /><i /></span>; }
@@ -41,8 +41,8 @@ const modes = [
 export default function LearnadeApp() {
   const [mode, setMode] = useState<Mode>("home");
   const [source, setSource] = useState(sampleText);
-  const [title, setTitle] = useState("The essentials of photosynthesis");
-  const [learningPackage, setLearningPackage] = useState(() => generateLocalLearningPackage(sampleText, "The essentials of photosynthesis"));
+  const [title, setTitle] = useState("Choose a course to begin");
+  const [learningPackage, setLearningPackage] = useState(() => generateLocalLearningPackage(sampleText, "Choose a course to begin"));
   const [library, setLibrary] = useState<SavedCourse[]>([]);
   const [activeId, setActiveId] = useState("demo");
   const [uploadTarget, setUploadTarget] = useState<{courseId?:string}|null>(null);
@@ -90,7 +90,8 @@ export default function LearnadeApp() {
   const updateCourseName=async(id:string,name:string)=>{const course=library.find(item=>item.id===id);if(!course)return;const updated=renameCourse(course,name);await persistCourse(updated,false);if(activeId===id){setTitle(updated.title);setLearningPackage(updated.package)}};
   const deleteMaterial=async(courseId:string,materialId:string)=>{const course=library.find(item=>item.id===courseId);if(!course)return;if(course.materials.length===1){await deleteItem(courseId);setManageCourseId(null);return}if(!confirm("Remove this material from the course? Existing study progress for other materials will stay saved."))return;const material=course.materials.find(item=>item.id===materialId);const updated=removeCourseMaterial(course,materialId);if(material?.audio)await deleteLectureAudio(material.audio.id);localStorage.removeItem(`learnade-diagnostic-${courseId}`);await persistCourse(updated,false);if(activeId===courseId){setSource(updated.source);setTitle(updated.title);setLearningPackage(updated.package)}};
   const activeCourse=library.find(item=>item.id===activeId);
-  const openSample=async()=>{const existing=library.find(item=>item.id===SAMPLE_COURSE_ID);if(existing){activateCourse(existing,"dashboard");return}const sample=createSampleCourse();try{await persistCourse(sample,false);activateCourse(sample,"dashboard")}catch{setSaved(false)}};
+  const openDemo=async(demoId:string)=>{const existing=library.find(item=>item.id===demoId);if(existing){activateCourse(existing,"dashboard");return}try{const demo=await createDemoCourse(demoId);await persistCourse(demo,false);activateCourse(demo,"dashboard")}catch{setSaved(false)}};
+  const openSample=()=>void openDemo(DEMO_COURSES[0].id);
   const openLibrary=()=>{setProfileOpen(false);requestAnimationFrame(()=>document.getElementById("library")?.scrollIntoView({behavior:"smooth"}))};
   const openProfileMode=(nextMode:Mode)=>{setProfileOpen(false);setMode(nextMode)};
 
@@ -147,6 +148,11 @@ export default function LearnadeApp() {
             <button className="secondary" onClick={() => setRecordTarget(activeCourse?{courseId:activeCourse.id}:{})}>● Record a lecture</button>
           </div>
           <button className="text-button sample-link" onClick={()=>void openSample()}>Or explore a ready-made sample course →</button>
+          <div className="demo-options" aria-label="Ready-made demo courses">
+            {DEMO_COURSES.map(demo=><button className="demo-option" key={demo.id} onClick={()=>void openDemo(demo.id)}>
+              <strong>Try {demo.title.replace("Demo Course: ","")}</strong><small>{demo.description}</small>
+            </button>)}
+          </div>
         </div>
         <div className="hero-art" aria-hidden="true">
           <div className="sun" />

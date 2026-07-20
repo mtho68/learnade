@@ -267,6 +267,8 @@ nav { display:flex; gap:28px; }
 
 /* Honest home demo and live course dashboard */
 .sample-link { display:block; margin-top:13px; text-align:left; }
+.demo-options { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; max-width:650px; margin-top:13px; }.demo-option { min-height:94px; padding:15px; border:1px solid var(--line); border-radius:15px; background:var(--paper); color:var(--ink); text-align:left; }.demo-option:hover { border-color:#48634e; background:var(--sage); }.demo-option strong,.demo-option small { display:block; }.demo-option strong { font:18px Georgia,serif; }.demo-option small { margin-top:6px; color:var(--muted); font-size:11px; line-height:1.35; }
+[data-theme="dark"] .demo-option { background:#202b24; }.demo-option:hover { background:#294333; }
 .sample-continue { grid-template-columns:auto 1fr auto; }
 .empty-actions { display:flex; justify-content:center; gap:10px; margin-top:20px; }
 .dashboard-panel { max-width:980px; margin:auto; }
@@ -310,6 +312,7 @@ nav { display:flex; gap:28px; }
 }
 @media (max-width:620px) {
   .sample-link { text-align:center; margin-inline:auto; }
+  .demo-options { grid-template-columns:1fr; }
   .empty-actions,.next-step { align-items:stretch; flex-direction:column; }
   .empty-actions button,.next-step button { width:100%; }
   .dashboard-heading { display:block; }

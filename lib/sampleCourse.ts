@@ -1,5 +1,6 @@
 import { combineCourseMaterials, courseSource, type CourseMaterial, type SavedCourse } from "./courseLibrary.ts";
 import { generateLocalLearningPackage } from "./localLearning.ts";
+import { extractDocument } from "./extractDocument.ts";
 
 export const SAMPLE_COURSE_ID = "learnade-sample-learning-science";
 
@@ -29,4 +30,45 @@ export function createSampleCourse(now = new Date()): SavedCourse {
   const materials: CourseMaterial[] = samples.map(sample => ({ ...sample, createdAt, package: generateLocalLearningPackage(sample.source, sample.title) }));
   const title = "Sample Course · Learning Science";
   return { id: SAMPLE_COURSE_ID, title, createdAt, updatedAt: createdAt, materials, source: courseSource(materials), package: combineCourseMaterials(materials, title) };
+}
+
+type DemoMaterial = { id: string; title: string; url: string };
+type DemoCourse = { id: string; title: string; description: string; materials: DemoMaterial[] };
+
+export const DEMO_COURSES: DemoCourse[] = [
+  {
+    id: "learnade-demo-anatomy-physiology",
+    title: "Demo Course: Anatomy & Physiology",
+    description: "Homeostasis, cardiovascular function, and nervous-system signaling.",
+    materials: [
+      { id: "demo-homeostasis", title: "Homeostasis and Body Organization", url: "/demo-courses/anatomy/homeostasis-and-body-organization.docx" },
+      { id: "demo-cardiovascular", title: "The Cardiovascular System", url: "/demo-courses/anatomy/the-cardiovascular-system.docx" },
+      { id: "demo-nervous", title: "The Nervous System", url: "/demo-courses/anatomy/the-nervous-system.docx" },
+    ],
+  },
+  {
+    id: "learnade-demo-computer-science",
+    title: "Demo Course: Introduction to Computer Science",
+    description: "Algorithms, data structures, and how computers represent information.",
+    materials: [
+      { id: "demo-algorithms", title: "Algorithms and What Computer Science Is", url: "/demo-courses/computer-science/algorithms-and-what-computer-science-is.docx" },
+      { id: "demo-data-structures", title: "Data Structures", url: "/demo-courses/computer-science/data-structures.docx" },
+      { id: "demo-binary", title: "Binary and Data Representation", url: "/demo-courses/computer-science/binary-and-data-representation.docx" },
+    ],
+  },
+];
+
+export const DEMO_COURSE_IDS = DEMO_COURSES.map(course => course.id);
+
+export async function createDemoCourse(demoId: string, now = new Date()): Promise<SavedCourse> {
+  const demo = DEMO_COURSES.find(course => course.id === demoId) ?? DEMO_COURSES[0];
+  const createdAt = now.toISOString();
+  const materials = await Promise.all(demo.materials.map(async material => {
+    const response = await fetch(material.url);
+    if (!response.ok) throw new Error(`Could not load ${material.title}.`);
+    const file = new File([await response.blob()], `${material.title}.docx`, { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+    const extracted = await extractDocument(file);
+    return { id: material.id, title: material.title, kind: "upload" as const, source: extracted.text, createdAt, package: generateLocalLearningPackage(extracted.text, material.title) } satisfies CourseMaterial;
+  }));
+  return { id: demo.id, title: demo.title, createdAt, updatedAt: createdAt, materials, source: courseSource(materials), package: combineCourseMaterials(materials, demo.title) };
 }
