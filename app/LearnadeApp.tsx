@@ -38,6 +38,48 @@ const modes = [
   { id: "exam", icon: "✎", title: "Mock Exam", text: "Build a timed exam from the course materials you choose." },
 ] as const;
 
+const tourSteps = [
+  { target:"[data-tour='welcome']", eyebrow:"WELCOME TO LEARNADE", title:"One course, many ways to learn.", text:"Learnade turns the same class material into study experiences that fit the way you want to learn today." },
+  { target:"[data-tour='dashboard']", eyebrow:"START HERE", title:"Your course dashboard keeps the next step clear.", text:"Use it to see progress, what needs review, and the best place to pick up without figuring it all out again." },
+  { target:"[data-tour='study-plan']", eyebrow:"PERSONALIZED PLAN", title:"Begin with a quick check, then follow a focused plan.", text:"My Study Plan identifies the concepts that need attention and gives you a manageable place to begin." },
+  { target:"[data-tour='accessible-reader']", eyebrow:"READ YOUR WAY", title:"Adjust reading instead of forcing your way through it.", text:"Accessible Reader lets you tune type, spacing, contrast, and line focus. It is there whenever dense text makes starting harder." },
+  { target:"[data-tour='practice']", eyebrow:"PRACTICE AND IMPROVE", title:"Use active practice to find what is sticking.", text:"Flashcards, quizzes, and mock exams show what needs another pass, then bring those concepts back into your next study session." },
+  { target:"[data-tour='library']", eyebrow:"YOUR LIBRARY", title:"Keep every class in one place.", text:"Add readings, slides, notes, or lecture recordings to a course. Your material and progress stay on this device." },
+] as const;
+
+function GuidedTour({step,onBack,onNext,onSkip}:{step:number;onBack:()=>void;onNext:()=>void;onSkip:()=>void}) {
+  const item=tourSteps[step];
+  const last=step===tourSteps.length-1;
+  const nextRef=useRef<HTMLButtonElement|null>(null);
+  const [spotlight,setSpotlight]=useState<{top:number;left:number;width:number;height:number}|null>(null);
+  useEffect(()=>{
+    const target=document.querySelector<HTMLElement>(item.target);
+    if(!target)return;
+    const reduced=window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const update=()=>{const rect=target.getBoundingClientRect();setSpotlight({top:Math.max(8,rect.top-8),left:Math.max(8,rect.left-8),width:Math.min(window.innerWidth-16,rect.width+16),height:Math.min(window.innerHeight-16,rect.height+16)});};
+    target.scrollIntoView({behavior:reduced?"auto":"smooth",block:"center"});
+    update();
+    const timer=window.setTimeout(update,reduced?0:360);
+    window.addEventListener("resize",update);
+    window.addEventListener("scroll",update,true);
+    return()=>{window.clearTimeout(timer);window.removeEventListener("resize",update);window.removeEventListener("scroll",update,true);};
+  },[item.target]);
+  useEffect(()=>{
+    const timer=window.setTimeout(()=>nextRef.current?.focus(),0);
+    const escape=(event:KeyboardEvent)=>{if(event.key==="Escape")onSkip();};
+    document.addEventListener("keydown",escape);
+    return()=>{window.clearTimeout(timer);document.removeEventListener("keydown",escape);};
+  },[onSkip,step]);
+  return <div className="tour-layer" role="dialog" aria-modal="true" aria-labelledby="tour-title" aria-describedby="tour-description">
+    {spotlight&&<div className="tour-spotlight" style={{top:spotlight.top,left:spotlight.left,width:spotlight.width,height:spotlight.height}} />}
+    <section className="tour-card">
+      <span className="eyebrow">{item.eyebrow}</span><span className="tour-count">{step+1} of {tourSteps.length}</span>
+      <h2 id="tour-title">{item.title}</h2><p id="tour-description">{item.text}</p>
+      <div className="tour-actions"><button className="text-button" onClick={onSkip}>Skip tour</button><span /><button className="secondary" onClick={onBack} disabled={step===0}>Back</button><button className="primary" ref={nextRef} onClick={onNext}>{last?"Finish":"Next"}</button></div>
+    </section>
+  </div>;
+}
+
 export default function LearnadeApp() {
   const [mode, setMode] = useState<Mode>("home");
   const [source, setSource] = useState(sampleText);
@@ -52,6 +94,7 @@ export default function LearnadeApp() {
   const [libraryLoaded,setLibraryLoaded]=useState(false);
   const [theme,setTheme]=useState<Theme>("light");
   const [profileOpen,setProfileOpen]=useState(false);
+  const [tourStep,setTourStep]=useState<number|null>(null);
   const profileRef=useRef<HTMLDivElement|null>(null);
 
   useEffect(()=>{const timer=setTimeout(()=>{const stored=localStorage.getItem("learnade-theme");setTheme(stored==="dark"||(!stored&&window.matchMedia("(prefers-color-scheme: dark)").matches)?"dark":"light")},0);return()=>clearTimeout(timer)},[]);
@@ -82,6 +125,12 @@ export default function LearnadeApp() {
     }).catch(()=>setSaved(false)).finally(()=>setLibraryLoaded(true));
   }, []);
 
+  useEffect(()=>{
+    if(!libraryLoaded||localStorage.getItem("learnade-tour-complete")==="1")return;
+    const timer=window.setTimeout(()=>setTourStep(0),500);
+    return()=>window.clearTimeout(timer);
+  },[libraryLoaded]);
+
   const activateCourse=(item:SavedCourse,nextMode:Mode="dashboard")=>{setSource(item.source);setTitle(item.title);setLearningPackage(item.package);setActiveId(item.id);setMode(nextMode)};
   const persistCourse=async(item:SavedCourse,activate=true)=>{setSaved(false);setLibrary(items=>[item,...items.filter(course=>course.id!==item.id)].sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)));if(activate)activateCourse(item,"dashboard");await saveLibraryItem(item);setSaved(true)};
   const saveMaterial = async (value:string,courseTitle:string,materialTitle:string,kind:MaterialKind,generated?:LearningPackage,courseId?:string,audio?:{blob:Blob;durationMs:number}) => {
@@ -103,6 +152,9 @@ export default function LearnadeApp() {
   const openLibrary=()=>{setProfileOpen(false);requestAnimationFrame(()=>document.getElementById("library")?.scrollIntoView({behavior:"smooth"}))};
   const openProfileMode=(nextMode:Mode)=>{setProfileOpen(false);setMode(nextMode)};
 
+  const finishTour=()=>{localStorage.setItem("learnade-tour-complete","1");setTourStep(null)};
+  const startTour=()=>{setProfileOpen(false);setTourStep(0)};
+  const advanceTour=()=>{if(tourStep===null)return;if(tourStep===tourSteps.length-1){finishTour();return;}setTourStep(tourStep+1)};
   if (mode !== "home") {
     const studyMaterials=activeCourse?.materials||[{id:"demo-material",title,source,createdAt:new Date(0).toISOString(),kind:"pasted" as const,package:learningPackage,preserveIds:true}];
     return <StudyMode mode={mode} theme={theme} onToggleTheme={toggleTheme} title={title} source={source} materials={studyMaterials} learningPackage={learningPackage} learnadeId={activeId} onChangeMode={setMode} onBack={() => setMode("home")} onManage={()=>{setMode("home");if(activeCourse)setManageCourseId(activeCourse.id);else setUploadTarget({})}} />;
@@ -123,13 +175,14 @@ export default function LearnadeApp() {
           <ThemeToggle theme={theme} onToggle={toggleTheme}/>
           <div className="profile" ref={profileRef}>
             <span className="save-status"><span className="save-dot" /> {saved ? "Saved locally" : "Saving…"}</span>
-            <button className="avatar" onClick={()=>setProfileOpen(open=>!open)} aria-label="Open learning menu" aria-haspopup="menu" aria-expanded={profileOpen}><span className="profile-icon" aria-hidden="true" /></button>
+            <button className="avatar" data-tour="menu" onClick={()=>setProfileOpen(open=>!open)} aria-label="Open learning menu" aria-haspopup="menu" aria-expanded={profileOpen}><span className="profile-icon" aria-hidden="true" /></button>
             {profileOpen&&<div className="profile-menu" role="menu" aria-label="Learning menu">
               <div className="profile-menu-heading"><strong>My Learnade</strong><span>{library.length} {library.length===1?"course":"courses"} saved on this browser</span></div>
               <div className="profile-menu-group">
                 <button role="menuitem" onClick={openLibrary}><span aria-hidden="true">▦</span><span><strong>My courses</strong><small>Open your learning library</small></span></button>
                 <button role="menuitem" onClick={()=>{setProfileOpen(false);setRecordTarget(activeCourse?{courseId:activeCourse.id}:{})}}><span aria-hidden="true">●</span><span><strong>Record a lecture</strong><small>{activeCourse?`Add to ${activeCourse.title}`:"Choose or create a course"}</small></span></button>
                 <button role="menuitem" onClick={()=>{setProfileOpen(false);setUploadTarget({})}}><span aria-hidden="true">＋</span><span><strong>Create a course</strong><small>Upload or paste new material</small></span></button>
+                <button role="menuitem" onClick={startTour}><span aria-hidden="true">?</span><span><strong>Take the tour</strong><small>See where everything lives</small></span></button>
               </div>
               {activeCourse&&<div className="profile-course">
                 <span>CURRENT COURSE</span><strong>{activeCourse.title}</strong>
@@ -146,7 +199,7 @@ export default function LearnadeApp() {
         </div>
       </header>
 
-      <section className="hero">
+      <section className="hero" data-tour="welcome">
         <div>
           <span className="eyebrow">YOUR LEARNING, YOUR WAY</span>
           <h1>Make learning<br/><em>work for your brain.</em></h1>
@@ -170,7 +223,7 @@ export default function LearnadeApp() {
         </div>
       </section>
 
-      <section className={`continue-card ${!activeCourse?"sample-continue":""}`}>
+      <section className={`continue-card ${!activeCourse?"sample-continue":""}`} data-tour="dashboard">
         <div className="material-icon">{activeCourse?"☀":"◎"}</div>
         <div className="material-copy">{!libraryLoaded?<><span className="eyebrow">LOADING</span><h2>Opening your learning library…</h2></>:activeCourse?<><span className="eyebrow">CONTINUE LEARNING</span><h2>{title}</h2><p>{activeCourse.materials.length} source {activeCourse.materials.length===1?"item":"items"} · {modes.length} learning modes ready</p></>:<><span className="eyebrow">60-SECOND PRODUCT TOUR</span><h2>See a complete Learnade course</h2><p>Open a safe sample with readings, lecture notes, flashcards, quizzes, and mock exams.</p></>}</div>
         {activeCourse&&<><div className="progress-copy"><strong>{learningPackage.sections.length}</strong><span>sections</span></div><div className="progress-track"><i /></div></>}
@@ -181,14 +234,14 @@ export default function LearnadeApp() {
         <div className="section-heading"><div><span className="eyebrow">CHOOSE WHAT WORKS NOW</span><h2>How do you want to learn?</h2></div><p>You can switch modes anytime. No setup, no penalty.</p></div>
         <div className="mode-grid">
           {modes.map((item, index) => (
-            <button className={`mode-card mode-${(index % 7) + 1}`} key={item.id} aria-label={item.title} onClick={() => setMode(item.id)}>
+            <button className={`mode-card mode-${(index % 7) + 1}`} key={item.id} data-tour={item.id==="plan"?"study-plan":item.id==="reader"?"accessible-reader":item.id==="cards"?"practice":undefined} aria-label={item.title} onClick={() => setMode(item.id)}>
               <span className="mode-icon" aria-hidden="true">{item.icon}</span><span><strong>{item.title}</strong><small>{item.text}</small></span><b aria-hidden="true">↗</b>
             </button>
           ))}
         </div>
       </section>
 
-      <section className="library-section" id="library">
+      <section className="library-section" id="library" data-tour="library">
         <div className="section-heading"><div><span className="eyebrow">SAVED ON THIS DEVICE</span><h2>My learning library</h2></div><p>Your documents and progress stay in this browser.</p></div>
         {libraryLoaded&&library.length === 0 ? <div className="library-empty"><strong>Your first course will appear here.</strong><p>Create one from your own material, or explore a complete sample first.</p><div className="empty-actions"><button className="primary" onClick={()=>void openSample()}>Explore sample course</button><button className="secondary" onClick={()=>setUploadTarget({})}>Create my own</button></div></div> : <div className="library-grid">{library.map(item=><article key={item.id}><button className="library-open" onClick={()=>openItem(item)}><span className="material-icon">L</span><span><small>{item.id===SAMPLE_COURSE_ID?"READY-MADE DEMO":`UPDATED ${new Date(item.updatedAt).toLocaleDateString()}`}</small><strong>{item.title}</strong><em>{item.materials.length} {item.materials.length===1?"source":"sources"} · {item.package.flashcards.length} cards</em></span></button><div className="course-actions"><button onClick={()=>setUploadTarget({courseId:item.id})}>＋ Material</button><button onClick={()=>setRecordTarget({courseId:item.id})}>● Lecture</button><button onClick={()=>setManageCourseId(item.id)}>Manage</button></div><button className="delete-item" onClick={()=>deleteItem(item.id)} aria-label={`Delete ${item.title}`}>×</button></article>)}</div>}
       </section>
@@ -196,6 +249,7 @@ export default function LearnadeApp() {
       {uploadTarget && <UploadModal course={uploadTarget.courseId?library.find(item=>item.id===uploadTarget.courseId):undefined} onClose={() => setUploadTarget(null)} onCreate={async (text, courseTitle, materialTitle, kind, generated) => { await saveMaterial(text,courseTitle,materialTitle,kind,generated,uploadTarget.courseId); setUploadTarget(null); }} />}
       {recordTarget && <LectureRecorderModal courses={library} defaultCourseId={recordTarget.courseId} onClose={()=>setRecordTarget(null)} onSave={async(text,courseTitle,lectureTitle,courseId,audio)=>{await saveMaterial(text,courseTitle,lectureTitle,"lecture",undefined,courseId,audio);setRecordTarget(null)}} />}
       {manageCourseId && library.find(item=>item.id===manageCourseId) && <ManageCourseModal course={library.find(item=>item.id===manageCourseId)!} onClose={()=>setManageCourseId(null)} onRename={updateCourseName} onDeleteMaterial={deleteMaterial} onAddMaterial={()=>{setManageCourseId(null);setUploadTarget({courseId:manageCourseId})}} onRecord={()=>{setManageCourseId(null);setRecordTarget({courseId:manageCourseId})}} onExam={()=>{const course=library.find(item=>item.id===manageCourseId);setManageCourseId(null);if(course)activateCourse(course,"exam")}} />}
+      {tourStep!==null&&<GuidedTour step={tourStep} onBack={()=>setTourStep(current=>current===null?null:Math.max(0,current-1))} onNext={advanceTour} onSkip={finishTour}/>}
     </main>
   );
 }
