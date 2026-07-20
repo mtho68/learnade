@@ -16,7 +16,7 @@ test("creates usable no-AI cards and quiz questions grounded in sections",()=>{
   assert.ok(result.flashcards.length>=5);
   assert.ok(result.quiz.length>=1);
   assert.ok(result.flashcards.every(card=>card.front&&card.back&&sectionIds.has(card.sourceSection)));
-  assert.ok(result.quiz.every(question=>question.options.length===4&&question.answer>=0&&question.answer<4&&sectionIds.has(question.sourceSection)));
+  assert.ok(result.quiz.every(question=>(question.type==="true-false"?question.options.length===2:question.options.length===4)&&question.answer>=0&&question.answer<question.options.length&&sectionIds.has(question.sourceSection)));
 });
 
 test("creates quiz prompts with one defensible answer",()=>{
@@ -25,10 +25,15 @@ test("creates quiz prompts with one defensible answer",()=>{
   for(const question of result.quiz){
     const correct=question.options[question.answer].toLowerCase();
     const quoted=question.prompt.match(/“([^”]+)”/)?.[1]?.toLowerCase()||"";
-    assert.ok(!question.prompt.toLowerCase().includes(correct),`prompt leaked correct answer: ${correct}`);
-    question.options.forEach((option,index)=>{
-      if(index!==question.answer)assert.ok(!quoted.includes(option.toLowerCase()),`quoted statement contains distractor: ${option}`);
-    });
+    if(question.type!=="true-false"){
+      assert.ok(!question.prompt.toLowerCase().includes(correct),`prompt leaked correct answer: ${correct}`);
+      question.options.forEach((option,index)=>{
+        if(index!==question.answer)assert.ok(!quoted.includes(option.toLowerCase()),`quoted statement contains distractor: ${option}`);
+      });
+    } else {
+      assert.ok(["true","false"].includes(correct));
+      assert.ok(quoted.length>10,"true/false prompt needs a concrete statement");
+    }
   }
 });
 
@@ -39,9 +44,9 @@ test("filters function words and creates no duplicate questions from one source 
   assert.ok(!terms.includes("without"));
   assert.ok(!terms.includes("within"));
   const sourceStatements=result.quiz.map(question=>question.explanation.toLowerCase());
-  assert.equal(result.quiz.length,5);
+  assert.ok(result.quiz.length>=5,"generator should provide enough distinct questions for a mock exam");
   assert.equal(new Set(sourceStatements).size,sourceStatements.length,"quiz repeated a source sentence");
-  assert.deepEqual(result.quiz.map(question=>question.id),["quiz-1","quiz-2","quiz-3","quiz-4","quiz-5"]);
+  assert.deepEqual(result.quiz.map((question,index)=>question.id),result.quiz.map((_question,index)=>`quiz-${index+1}`));
 });
 
 test("schedules successful cards farther apart and failed cards immediately",()=>{
