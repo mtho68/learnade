@@ -13,4 +13,8 @@ test("course action groups use consistent icon placement and sizing", () => {
   assert.doesNotMatch(css, /\.secondary span\s*\{/);
   assert.match(css, /\.course-actions button \{[^}]*display:inline-flex/);
   assert.equal((app.match(/<CourseActionButton/g) || []).length, 3);
+  assert.match(app, /className="manage-modal-scroll"/);
+  assert.match(css, /\.manage-modal \{[^}]*overflow:hidden;[^}]*padding:0/);
+  assert.match(css, /\.manage-modal-scroll \{[^}]*overflow-y:auto/);
+  assert.match(css, /\.manage-modal \.modal-close \{[^}]*position:absolute/);
 });
