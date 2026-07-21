@@ -17,6 +17,22 @@
   - [x] Complete hands-on desktop and mobile browser QA.
   - [x] Publish and verify the Sites deployment.
 
+## Milestone 2: Submission packaging
+- Status: in progress
+- Deliverable: Complete judge-accessible Devpost submission package.
+- Acceptance criteria:
+  - Public or correctly shared code repository with a license and tested setup instructions.
+  - Accurate Devpost description, live link, category, feedback ID, and repository URL.
+  - Public or unlisted narrated YouTube demo under three minutes.
+  - Submission is no longer a draft before the deadline.
+- Work items:
+  - [x] Expand README with provenance, setup, demo, decisions, and verification.
+  - [x] Add MIT license and saved Devpost copy.
+  - [x] Update Devpost project page and live app link.
+  - [ ] Publish source repository and add its URL to Devpost.
+  - [ ] Add video and required personal fields.
+  - [ ] Review and submit the hackathon entry.
+
 ## Backlog
 - [ ] Consider bundle code splitting after the submission deadline.
 

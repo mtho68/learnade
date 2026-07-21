@@ -1,60 +1,116 @@
 # Learnade
 
-Learnade turns PDFs, DOCX files, PPTX decks, TXT files, and pasted notes into a neuroinclusive study workspace. Everything can run in the browser without asking a learner for an API key.
+Learnade turns readings, lecture notes, presentations, and recorded lectures into a flexible study workspace. Learners can use the same source material as accessible reading, focused review, flashcards, practice quizzes, mock exams, or a personalized study plan.
+
+**Live app:** https://learnade.hannahandmattthorsen.chatgpt.site
+
+## Why it exists
+
+Long-form studying can make useful material difficult to enter. Reading needs, attention, and energy also change from one study session to the next. Learnade gives learners several honest ways to approach the same source without treating one study method as universally correct.
+
+Learnade is an educational support tool. It does not claim to diagnose, treat, or guarantee learning outcomes.
 
 ## What it does
 
-- Accessible Reader with the real OpenDyslexic font, adjustable type, and line focus
-- RSVP Speed Reader with a stable focal point and punctuation-aware pacing
-- Brainrot Mode with Minecraft parkour or Subway Surfers gameplay, synchronized captions, and browser-generated narration
-- ADHD-friendly focus session with a Pomodoro-style timer and smaller-step rescue
-- Source-grounded study guides, flashcards with review/known stacks, and multi-question quizzes
-- Local document extraction and an IndexedDB learning library
-- Optional server-side GPT-5.6 Terra enhancement through Learnade's protected, rate-limited API route
-- Optional free on-device AI using `onnx-community/Qwen2.5-0.5B-Instruct` through Transformers.js; WebGPU users download the quantized model once, and source text stays in their browser
-- A deterministic instant generator remains available when AI is declined, unsupported, or offline
+- Creates courses from PDFs, DOCX files, PPTX decks, TXT files, pasted notes, and lecture transcripts
+- Provides an Accessible Reader with OpenDyslexic, adjustable type, contrast, spacing, and line focus
+- Includes a fixed-focus RSVP Speed Reader, narration with captions, and manageable Focus Sessions
+- Builds source-grounded study guides, flashcards, practice quizzes, diagnostics, and mock exams
+- Tracks concept mastery, spaced review, and missed material to recommend what to study next
+- Lets learners select the relevant course materials in supported study modes
+- Stores courses and progress locally in the browser without requiring an account
+- Offers an instant deterministic generator, an optional browser-local Qwen model, and an optional protected GPT-5.6 Terra enhancement
 
-## Inspiration
+## Try the complete demo
 
-Long-form studying can make the material feel harder to enter than it needs to be. Learnade was inspired by the desire to make learning more accessible, not only for learners with dyslexia or ADHD, but for anyone whose attention, energy, or reading needs change from day to day.
+1. Open the [live app](https://learnade.hannahandmattthorsen.chatgpt.site) in a fresh browser.
+2. Follow or skip the guided product tour.
+3. Select **Try Anatomy & Physiology** or **Try Introduction to Computer Science**.
+4. Use the Course Dashboard to start the diagnostic or open the personalized plan.
+5. Use Quick Demo to enter Accessible Reader, Flashcards, Practice Quiz, or Mock Exam.
 
-## How Codex and GPT-5.6 were used
+Demo selection is explicit. A fresh browser starts with an empty learning library and does not display invented learner progress.
 
-Learnade's original product design and implementation were developed in ChatGPT with GPT-5.6. For the Build Week submission, Codex was then used in a separate task to implement and verify a judge-facing onboarding and accessibility polish pass. That Codex work improved the guided tour, clarified the first-run demo path, strengthened keyboard behavior, and verified the production build and deployment.
+## Adaptive learning loop
 
-Learners do not need to provide an OpenAI key. At runtime, selected material can optionally use GPT-5.6 Terra through Learnade's protected server-side route. Learners can instead use the openly licensed Qwen2.5 0.5B model locally in a supported browser, or use the fully client-side deterministic generator. Learnade intentionally does not show an OpenAI sign-in button because sign-in alone would not power model inference.
+Learnade records outcomes from the diagnostic, flashcards, quizzes, and mock exams. Those results update concept mastery, return weak material for review, and change the recommended next activity. Recommendations are grounded in the selected course sources rather than a generic curriculum.
 
-## Challenges
+## How GPT-5.6 and Codex were used
 
-The project was built under a tight Build Week timeline. The hardest parts were balancing ambitious multimodal learning modes with privacy, no-key onboarding, accessible controls, document parsing, browser compatibility, and honest source grounding.
+Learnade was created during the OpenAI Build Week submission period. The original product design and implementation were developed in ChatGPT with GPT-5.6. GPT-5.6 helped shape the product architecture, implement the learning modes and local course engine, debug interaction problems, and develop the optional protected GPT-5.6 Terra generation path.
 
-## Accomplishments
+The repository was then opened in a separate Codex desktop task for a focused implementation and release pass. Codex:
 
-Learnade supports several genuinely different ways to approach the same source material while keeping the learner in control. It includes a real dyslexia-oriented font, study-state-aware flashcards, functional quiz progression and feedback, source links, focus supports, and a no-account/no-key local-first architecture.
+- Recovered and reconciled the latest deployed repository state before editing
+- Rebuilt the guided tour to cover all core modes and explain the adaptive learning loop
+- Changed first-run behavior so demos are selected explicitly and progress remains honest
+- Added keyboard focus trapping, Escape handling, focus restoration, dynamic target filtering, and tooltip placement
+- Verified light mode, dark mode, reduced motion, desktop layout, and every tour step at 375-pixel width
+- Added regression coverage for tour targets, production metadata, and social sharing metadata
+- Ran the production build and all automated tests, then published Sites version 29
 
-## What we learned
+The key release decisions were to keep the work judge-visible, preserve the protected Terra API path, avoid adding accounts or new providers, and fix real onboarding and accessibility failures instead of redesigning the product.
 
-We learned more about inclusive study methods, responsible assistive UX, small browser models, WebGPU, local-first storage, multimodal focus aids, project management, and shipping quickly without pretending heuristic output is AI.
+This history is intentionally specific. The original ChatGPT work is not represented as a Codex task.
 
-## What is next
+## Runtime AI choices
 
-- Human usability testing with students and accessibility specialists
-- OCR for scanned PDFs
-- More robust long-document chunking and model-quality evaluation
-- Installable PWA and eventual app-store packaging
-- Optional encrypted cross-device sync
+Learners never provide an OpenAI key.
+
+- **Learnade AI:** Selected source material can be sent to a protected, rate-limited server route using GPT-5.6 Terra. The key stays in the hosting environment.
+- **On-device AI:** Supported browsers can optionally download `onnx-community/Qwen2.5-0.5B-Instruct` and generate study material locally with WebGPU.
+- **Instant local mode:** A deterministic source-grounded generator works without a model download or network request.
+
+Uploaded text, generated material, and study progress are stored in the browser. The GPT-5.6 enhancement is optional and clearly labeled.
+
+## Technology
+
+- React 19, TypeScript, Next.js-compatible routing, Vite, and vinext
+- OpenAI Sites hosting with a server-side GPT-5.6 Terra route
+- IndexedDB and local storage for courses, audio, and study progress
+- PDF.js, Mammoth, and JSZip for document extraction
+- Transformers.js for the optional browser-local model
+- Node test runner and ESLint for regression verification
 
 ## Local development
 
-Requires Node.js 22.13 or newer.
+Requires Node.js 22.13 or newer and npm.
 
 ```bash
 npm install
 npm run dev
 ```
 
-Run production verification with `npm test`.
+The development server is available at `http://localhost:5173` by default. On Windows, run the npm commands from Git Bash because the project scripts use Bash helpers.
 
-## Privacy and model notes
+Run the complete production gate with:
 
-Uploaded text, generated materials, and progress are stored in the browser. Choosing Learnade AI sends the selected source to the protected GPT-5.6 Terra route for generation and does not require the learner's own key. The separate on-device AI option is opt-in because its first use downloads roughly 500 MB and requires WebGPU. The Qwen model is Apache-2.0 licensed. Embedded gameplay is linked and attributed in the product; availability remains subject to the video host.
+```bash
+npm test
+```
+
+The gate runs lint, creates and validates the production Sites artifact, and executes the automated regression suite. The verified submission release passed all 23 tests on July 20, 2026.
+
+The deterministic mode and built-in demo courses do not require environment variables. To test the optional protected GPT-5.6 path locally, provide `OPENAI_API_KEY` only through a local environment file. Environment files are excluded from Git.
+
+## Repository and licensing
+
+Learnade's original source code and project-specific assets are released under the [MIT License](LICENSE). Dependencies and remotely embedded content retain their own licenses and terms. The Qwen model is Apache-2.0 licensed. Never commit API keys, learner documents, browser storage, recordings, or generated private course data.
+
+## Verification and release
+
+- Submission release commit: `d9c71d793f8dadfdc129213a0c4c136a6dba69c3`
+- OpenAI Sites version: 29
+- Automated result: 23 tests passed, 0 failed
+- Browser QA: fresh state, explicit demo selection, dashboard, plan, Reader, Flashcards, Quiz, Mock Exam, focus behavior, dark mode, and narrow mobile tour
+- Public deployment: https://learnade.hannahandmattthorsen.chatgpt.site
+
+The production build has a non-blocking large-bundle warning. Code splitting is intentionally deferred until after submission to avoid destabilizing the verified release.
+
+## What is next
+
+- Human usability testing with students and accessibility specialists
+- OCR for scanned PDFs
+- More robust long-document chunking and model-quality evaluation
+- Installable PWA packaging
+- Optional encrypted cross-device sync
