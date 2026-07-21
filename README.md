@@ -50,7 +50,7 @@ The repository was then opened in a separate Codex desktop task for a focused im
 - Added visible course-generation provenance and explained how browser-only memory works without an account
 - Added regression coverage for the tour, focus-session state, course provenance, production metadata, and social sharing
 - Standardized repeated action-button groups and verified their alignment and overflow at desktop and 375-pixel widths
-- Ran the production build and all automated tests, then published Sites version 33
+- Ran the production build and all automated tests, then published Sites version 34
 
 The key release decisions were to keep the work judge-visible, preserve the protected Terra API path, avoid adding accounts or new providers, and fix real onboarding and accessibility failures instead of redesigning the product.
 
@@ -102,8 +102,8 @@ Learnade's original source code and project-specific assets are released under t
 
 ## Verification and release
 
-- Submission release commit: `4c652b0664e612d38935ee2a4f47d9500303ec69`
-- OpenAI Sites version: 33
+- Submission release commit: `6441d6d247ed06e11b8a049a456cc12585e85d48`
+- OpenAI Sites version: 34
 - Automated result: 30 tests passed, 0 failed
 - Browser QA: fresh state, explicit demo selection, dashboard, plan, Reader, Flashcards, Quiz, Mock Exam, focus behavior, dark mode, narrow mobile tour, button consistency, and a fixed course-manager close button at both ends of its scroll range without horizontal overflow
 - Public deployment: https://learnade.hannahandmattthorsen.chatgpt.site

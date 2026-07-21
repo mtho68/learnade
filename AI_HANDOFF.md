@@ -15,13 +15,14 @@ Record the narrated demo video, add the YouTube URL and remaining personal field
 - Corrected production metadata tests and documented the ChatGPT-origin/Codex-polish history truthfully.
 - Fixed focus-session navigation so the timer and checklist remain active while opening sources or switching modes, with a clear return path.
 - Added visible per-course generation provenance and an explicit explanation of browser-only memory without an account.
-- Published Sites version 33 from commit 4c652b0664e612d38935ee2a4f47d9500303ec69 and verified the public URL.
+- Published Sites version 34 from commit 6441d6d247ed06e11b8a049a456cc12585e85d48 and verified the public URL.
 - Moved course-manager scrolling into a clipped inner panel so its scrollbar fits the rounded modal and the close button remains visible and clickable at every scroll position.
 - Standardized the five course-management actions to equal icon-over-label buttons with a responsive mobile grid, removed a global secondary-button offset, and gave all three course-card actions the same icon-plus-label structure.
 - Added a Build Week-ready README, MIT license, and DEVPOST_SUBMISSION.md.
 - Published the public GitHub repository at https://github.com/mtho68/learnade and recorded it in the submission copy.
 - Updated the Devpost project page with accurate GPT-5.6 and Codex history and the live application URL.
 - Submitted Codex feedback and recorded session ID 019f819c-1609-72c2-b866-8b00dcc676c8.
+- Replaced ambiguous “Learnade AI” labels with “GPT-5.6 Terra via Learnade” and explicit OpenAI model attribution across the interface, API feedback, README, and submission copy.
 
 ## Decisions and constraints
 - The protected GPT-5.6 Terra API path was not modified.
@@ -54,10 +55,10 @@ Record the narrated demo video, add the YouTube URL and remaining personal field
 - Last updated at: 2026-07-21
 
 <!-- BEGIN GENERATED SNAPSHOT -->
-Generated at: 2026-07-21T10:36:17-07:00
+Generated at: 2026-07-21T10:45:03-07:00
 Project root: K:\Projects\learnade
 Git branch: main
-HEAD: 4c652b0
+HEAD: 6441d6d
 
 Git status:
 ```text
@@ -74,9 +75,9 @@ warning: in the working copy of 'AI_HANDOFF.md', LF will be replaced by CRLF the
 warning: in the working copy of 'DEVPOST_SUBMISSION.md', LF will be replaced by CRLF the next time Git touches it
 warning: in the working copy of 'README.md', LF will be replaced by CRLF the next time Git touches it
  .project/PROJECT_STATUS.md | 4 ++--
- AI_HANDOFF.md              | 5 +++--
+ AI_HANDOFF.md              | 3 ++-
  DEVPOST_SUBMISSION.md      | 2 +-
- README.md                  | 8 ++++----
- 4 files changed, 10 insertions(+), 9 deletions(-)
+ README.md                  | 6 +++---
+ 4 files changed, 8 insertions(+), 7 deletions(-)
 ```
 <!-- END GENERATED SNAPSHOT -->
