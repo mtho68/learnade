@@ -32,7 +32,7 @@
   - Updated the Devpost project page with accurate GPT-5.6 and Codex history plus the live app link.
   - Published the public GitHub repository and added its URL to the submission copy.
   - Fixed focus-session continuity and made generation provenance and browser-only memory visible.
-  - Published and verified OpenAI Sites version 30.
+  - Published and verified OpenAI Sites version 31, including cohesive course-management action buttons.
 - In progress:
   - Narrated demo video.
 - Next:
@@ -41,7 +41,7 @@
 ## Health
 - Status: amber
 - Risks / blockers: .project/RISKS.md
-- Latest verification: npm test passed on 2026-07-20, production build and artifact validation passed, 29 of 29 tests passed; Sites version 30 is public.
+- Latest verification: npm test passed on 2026-07-21, production build and artifact validation passed, 30 of 30 tests passed; Sites version 31 is public.
 
 ## Navigation
 - Detailed plan: `.project/PLAN.md`

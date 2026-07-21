@@ -49,7 +49,7 @@ The repository was then opened in a separate Codex desktop task for a focused im
 - Kept focus-session time and task progress active while learners open sources or switch study modes, with a clear route back
 - Added visible course-generation provenance and explained how browser-only memory works without an account
 - Added regression coverage for the tour, focus-session state, course provenance, production metadata, and social sharing
-- Ran the production build and all automated tests, then published Sites version 30
+- Ran the production build and all automated tests, then published Sites version 31
 
 The key release decisions were to keep the work judge-visible, preserve the protected Terra API path, avoid adding accounts or new providers, and fix real onboarding and accessibility failures instead of redesigning the product.
 
@@ -91,7 +91,7 @@ Run the complete production gate with:
 npm test
 ```
 
-The gate runs lint, creates and validates the production Sites artifact, and executes the automated regression suite. The verified submission release passed all 29 tests on July 20, 2026.
+The gate runs lint, creates and validates the production Sites artifact, and executes the automated regression suite. The verified submission release passed all 30 tests on July 21, 2026.
 
 The deterministic mode and built-in demo courses do not require environment variables. To test the optional protected GPT-5.6 path locally, provide `OPENAI_API_KEY` only through a local environment file. Environment files are excluded from Git.
 
@@ -101,9 +101,9 @@ Learnade's original source code and project-specific assets are released under t
 
 ## Verification and release
 
-- Submission release commit: `115773d3508a9f18067c9b3ab49e7a9ba6fd00e9`
-- OpenAI Sites version: 30
-- Automated result: 29 tests passed, 0 failed
+- Submission release commit: `e5f643a5fecfca86fe51e2b59c74343245b695a0`
+- OpenAI Sites version: 31
+- Automated result: 30 tests passed, 0 failed
 - Browser QA: fresh state, explicit demo selection, dashboard, plan, Reader, Flashcards, Quiz, Mock Exam, focus behavior, dark mode, and narrow mobile tour
 - Public deployment: https://learnade.hannahandmattthorsen.chatgpt.site
 

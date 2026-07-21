@@ -15,7 +15,8 @@ Record the narrated demo video, add the YouTube URL and remaining personal field
 - Corrected production metadata tests and documented the ChatGPT-origin/Codex-polish history truthfully.
 - Fixed focus-session navigation so the timer and checklist remain active while opening sources or switching modes, with a clear return path.
 - Added visible per-course generation provenance and an explicit explanation of browser-only memory without an account.
-- Published Sites version 30 from commit 115773d3508a9f18067c9b3ab49e7a9ba6fd00e9 and verified the public URL.
+- Published Sites version 31 from commit e5f643a5fecfca86fe51e2b59c74343245b695a0 and verified the public URL.
+- Standardized the five course-management actions to equal icon-over-label buttons with a responsive mobile grid.
 - Added a Build Week-ready README, MIT license, and DEVPOST_SUBMISSION.md.
 - Published the public GitHub repository at https://github.com/mtho68/learnade and recorded it in the submission copy.
 - Updated the Devpost project page with accurate GPT-5.6 and Codex history and the live application URL.
@@ -37,7 +38,7 @@ Record the narrated demo video, add the YouTube URL and remaining personal field
 
 ## Verification
 - Command: npm test through Git Bash
-  Result: Passed on 2026-07-20. Production build and Sites artifact validation succeeded; all 29 tests passed. One pre-existing lint warning and the existing bundle-size warning remain.
+  Result: Passed on 2026-07-21. Production build and Sites artifact validation succeeded; all 30 tests passed. One pre-existing lint warning and the existing bundle-size warning remain.
 - Hands-on browser QA
   Result: Passed fresh empty state, explicit demo selection, Reader, Flashcards, Quiz, Mock Exam, focus trap and return, dark mode, completion persistence, and all 12 tour steps at 375px width without horizontal overflow or tooltip/control overlap.
 
@@ -52,17 +53,14 @@ Record the narrated demo video, add the YouTube URL and remaining personal field
 - Last updated at: 2026-07-20
 
 <!-- BEGIN GENERATED SNAPSHOT -->
-Generated at: 2026-07-20T23:27:36-07:00
+Generated at: 2026-07-21T00:26:32-07:00
 Project root: K:\Projects\learnade
 Git branch: main
-HEAD: 115773d
+HEAD: e5f643a
 
 Git status:
 ```text
-M .project/DECISIONS.md
- M .project/PLAN.md
- M .project/PROJECT_STATUS.md
- M .project/RISKS.md
+M .project/PROJECT_STATUS.md
  M AI_HANDOFF.md
  M DEVPOST_SUBMISSION.md
  M README.md
@@ -70,20 +68,14 @@ M .project/DECISIONS.md
 
 Diff stat (working tree):
 ```text
-warning: in the working copy of '.project/DECISIONS.md', LF will be replaced by CRLF the next time Git touches it
-warning: in the working copy of '.project/PLAN.md', LF will be replaced by CRLF the next time Git touches it
 warning: in the working copy of '.project/PROJECT_STATUS.md', LF will be replaced by CRLF the next time Git touches it
-warning: in the working copy of '.project/RISKS.md', LF will be replaced by CRLF the next time Git touches it
 warning: in the working copy of 'AI_HANDOFF.md', LF will be replaced by CRLF the next time Git touches it
 warning: in the working copy of 'DEVPOST_SUBMISSION.md', LF will be replaced by CRLF the next time Git touches it
 warning: in the working copy of 'README.md', LF will be replaced by CRLF the next time Git touches it
- .project/DECISIONS.md      |  7 +++++++
- .project/PLAN.md           |  2 +-
- .project/PROJECT_STATUS.md | 19 +++++++++++--------
- .project/RISKS.md          |  7 -------
- AI_HANDOFF.md              | 22 +++++++++++++---------
+ .project/PROJECT_STATUS.md |  4 ++--
+ AI_HANDOFF.md              |  5 +++--
  DEVPOST_SUBMISSION.md      |  2 +-
- README.md                  | 14 ++++++++------
- 7 files changed, 41 insertions(+), 32 deletions(-)
+ README.md                  | 10 +++++-----
+ 4 files changed, 11 insertions(+), 10 deletions(-)
 ```
 <!-- END GENERATED SNAPSHOT -->
