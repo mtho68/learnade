@@ -15,3 +15,10 @@
 - Why: Automatically seeded courses looked like fake learner history.
 - Consequences / constraints: Demo content is created only after the visitor chooses it.
 - Evidence or links: app/LearnadeApp.tsx
+
+## 2026-07-20: Show generation provenance without overstating AI use
+- Status: accepted
+- Decision: Every course dashboard states whether its study materials came from GPT-5.6 Terra, on-device AI, or the deterministic local generator.
+- Why: Learners and judges should be able to see when AI actually ran, while built-in demos must not be mislabeled.
+- Consequences / constraints: Account-free memory is described as browser-only storage with no cloud sync.
+- Evidence or links: lib/courseLibrary.ts and app/LearnadeApp.tsx

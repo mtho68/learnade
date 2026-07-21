@@ -46,8 +46,10 @@ The repository was then opened in a separate Codex desktop task for a focused im
 - Changed first-run behavior so demos are selected explicitly and progress remains honest
 - Added keyboard focus trapping, Escape handling, focus restoration, dynamic target filtering, and tooltip placement
 - Verified light mode, dark mode, reduced motion, desktop layout, and every tour step at 375-pixel width
-- Added regression coverage for tour targets, production metadata, and social sharing metadata
-- Ran the production build and all automated tests, then published Sites version 29
+- Kept focus-session time and task progress active while learners open sources or switch study modes, with a clear route back
+- Added visible course-generation provenance and explained how browser-only memory works without an account
+- Added regression coverage for the tour, focus-session state, course provenance, production metadata, and social sharing
+- Ran the production build and all automated tests, then published Sites version 30
 
 The key release decisions were to keep the work judge-visible, preserve the protected Terra API path, avoid adding accounts or new providers, and fix real onboarding and accessibility failures instead of redesigning the product.
 
@@ -89,7 +91,7 @@ Run the complete production gate with:
 npm test
 ```
 
-The gate runs lint, creates and validates the production Sites artifact, and executes the automated regression suite. The verified submission release passed all 23 tests on July 20, 2026.
+The gate runs lint, creates and validates the production Sites artifact, and executes the automated regression suite. The verified submission release passed all 29 tests on July 20, 2026.
 
 The deterministic mode and built-in demo courses do not require environment variables. To test the optional protected GPT-5.6 path locally, provide `OPENAI_API_KEY` only through a local environment file. Environment files are excluded from Git.
 
@@ -99,9 +101,9 @@ Learnade's original source code and project-specific assets are released under t
 
 ## Verification and release
 
-- Submission release commit: `d9c71d793f8dadfdc129213a0c4c136a6dba69c3`
-- OpenAI Sites version: 29
-- Automated result: 23 tests passed, 0 failed
+- Submission release commit: `115773d3508a9f18067c9b3ab49e7a9ba6fd00e9`
+- OpenAI Sites version: 30
+- Automated result: 29 tests passed, 0 failed
 - Browser QA: fresh state, explicit demo selection, dashboard, plan, Reader, Flashcards, Quiz, Mock Exam, focus behavior, dark mode, and narrow mobile tour
 - Public deployment: https://learnade.hannahandmattthorsen.chatgpt.site
 

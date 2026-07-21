@@ -29,7 +29,7 @@
   - [x] Expand README with provenance, setup, demo, decisions, and verification.
   - [x] Add MIT license and saved Devpost copy.
   - [x] Update Devpost project page and live app link.
-  - [ ] Publish source repository and add its URL to Devpost.
+  - [x] Publish source repository and add its URL to the submission copy.
   - [ ] Add video and required personal fields.
   - [ ] Review and submit the hackathon entry.
 
