@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import "@fontsource/opendyslexic/400.css";
 import { extractDocument } from "../lib/extractDocument";
 import { generateLocalLearningPackage, type LearningPackage } from "../lib/localLearning";
@@ -14,6 +14,7 @@ import { buildMockExam, gradeMockExam, type MockExam as MockExamData } from "../
 import { buildDashboardSnapshot, type AttemptSummary, type DashboardSnapshot } from "../lib/courseDashboard";
 import { createDemoCourse, DEMO_COURSES, DEMO_COURSE_IDS, SAMPLE_COURSE_ID } from "../lib/sampleCourse";
 import { availableGuidedTourSteps, type GuidedTourStep } from "../lib/guidedTour";
+import { createFocusSessionState, DEFAULT_FOCUS_SECONDS, focusSessionReducer, formatFocusTime, type FocusSessionAction, type FocusSessionState } from "../lib/focusSession";
 
 type Mode = "home" | "dashboard" | "plan" | "reader" | "speed" | "focus" | "brainrot" | "guide" | "cards" | "quiz" | "exam";
 type Theme = "light" | "dark";
@@ -142,6 +143,7 @@ export default function LearnadeApp() {
   const [tourStep,setTourStep]=useState<number|null>(null);
   const [tourSequence,setTourSequence]=useState<readonly GuidedTourStep[]>([]);
   const [tourReturnFocusTarget,setTourReturnFocusTarget]=useState<HTMLElement|null>(null);
+  const [focusSession,dispatchFocusSession]=useReducer(focusSessionReducer,undefined,createFocusSessionState);
   const profileRef=useRef<HTMLDivElement|null>(null);
   const menuTriggerRef=useRef<HTMLButtonElement|null>(null);
 
@@ -153,6 +155,16 @@ export default function LearnadeApp() {
 
   useEffect(()=>{const timer=setTimeout(()=>{const stored=localStorage.getItem("learnade-theme");setTheme(stored==="dark"||(!stored&&window.matchMedia("(prefers-color-scheme: dark)").matches)?"dark":"light")},0);return()=>clearTimeout(timer)},[]);
   const toggleTheme=()=>setTheme(current=>{const next=current==="light"?"dark":"light";localStorage.setItem("learnade-theme",next);return next});
+
+  useEffect(()=>{
+    if(mode==="focus")dispatchFocusSession({type:"engage"});
+  },[mode]);
+
+  useEffect(()=>{
+    if(!focusSession.running)return;
+    const timer=window.setInterval(()=>dispatchFocusSession({type:"tick"}),1000);
+    return()=>window.clearInterval(timer);
+  },[focusSession.running]);
 
   useEffect(()=>{
     if(!profileOpen)return;
@@ -214,7 +226,7 @@ export default function LearnadeApp() {
   const skipUnavailableTourStep=()=>{if(tourStep===null)return;if(tourSequence.length<=1){finishTour();return;}setTourSequence(current=>current.filter((_item,index)=>index!==tourStep));setTourStep(current=>current===null?null:Math.min(current,Math.max(0,tourSequence.length-2)))};
   if (mode !== "home") {
     const studyMaterials=activeCourse?.materials||[{id:"demo-material",title,source,createdAt:new Date(0).toISOString(),kind:"pasted" as const,package:learningPackage,preserveIds:true}];
-    return <StudyMode mode={mode} theme={theme} onToggleTheme={toggleTheme} title={title} source={source} materials={studyMaterials} learningPackage={learningPackage} learnadeId={activeId} onChangeMode={setMode} onBack={() => setMode("home")} onManage={()=>{setMode("home");if(activeCourse)setManageCourseId(activeCourse.id);else setUploadTarget({})}} />;
+    return <StudyMode mode={mode} theme={theme} onToggleTheme={toggleTheme} title={title} source={source} materials={studyMaterials} learningPackage={learningPackage} learnadeId={activeId} focusSession={focusSession} dispatchFocusSession={dispatchFocusSession} onChangeMode={setMode} onBack={() => setMode("home")} onManage={()=>{setMode("home");if(activeCourse)setManageCourseId(activeCourse.id);else setUploadTarget({})}} />;
   }
 
   return (
@@ -310,6 +322,7 @@ export default function LearnadeApp() {
       {audioUploadTarget && <AudioUploadModal courses={library} defaultCourseId={audioUploadTarget.courseId} onClose={()=>setAudioUploadTarget(null)} onSave={async(text,courseTitle,lectureTitle,courseId,audio)=>{await saveMaterial(text,courseTitle,lectureTitle,"lecture",undefined,courseId,audio);setAudioUploadTarget(null)}} />}
       {manageCourseId && library.find(item=>item.id===manageCourseId) && <ManageCourseModal course={library.find(item=>item.id===manageCourseId)!} onClose={()=>setManageCourseId(null)} onRename={updateCourseName} onDeleteMaterial={deleteMaterial} onAddMaterial={()=>{setManageCourseId(null);setUploadTarget({courseId:manageCourseId})}} onRecord={()=>{setManageCourseId(null);setRecordTarget({courseId:manageCourseId})}} onUploadAudio={()=>{setManageCourseId(null);setAudioUploadTarget({courseId:manageCourseId})}} onExam={()=>{const course=library.find(item=>item.id===manageCourseId);setManageCourseId(null);if(course)activateCourse(course,"exam")}} onRegenerate={()=>void regenerateCourse(manageCourseId)} onEnhance={(materialId,engine)=>enhanceMaterial(manageCourseId,materialId,engine)} />}
       {tourStep!==null&&tourSequence[tourStep]&&<GuidedTour steps={tourSequence} step={tourStep} onBack={()=>setTourStep(current=>current===null?null:Math.max(0,current-1))} onNext={advanceTour} onSkip={finishTour} onUnavailable={skipUnavailableTourStep} returnFocusTarget={tourReturnFocusTarget}/>}
+      {focusSession.engaged&&<FocusTimerDock session={focusSession} dispatch={dispatchFocusSession} onReturn={()=>setMode("focus")} />}
     </main>
   );
 }
@@ -350,12 +363,13 @@ function ManageCourseModal({course,onClose,onRename,onDeleteMaterial,onAddMateri
   const [name,setName]=useState(course.title);const [saving,setSaving]=useState(false);const [enhancing,setEnhancing]=useState<string|null>(null);const saveName=async()=>{setSaving(true);await onRename(course.id,name);setSaving(false)};const enhance=async(id:string,engine:"hosted"|"device")=>{setEnhancing(`${id}:${engine}`);try{await onEnhance(id,engine)}finally{setEnhancing(null)}};const generationLabel=(material:CourseMaterial)=>material.generation?.mode==="gpt-5.6-terra"?`Learnade AI · GPT-5.6 Terra · ${new Date(material.generation.generatedAt).toLocaleDateString()}`:material.generation?.mode==="on-device-ai"?`On-device AI · ${new Date(material.generation.generatedAt).toLocaleDateString()}`:"Private local generator";
   return <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="manage-title"><div className="modal manage-modal"><button className="modal-close" onClick={onClose} aria-label="Close">×</button><span className="eyebrow">COURSE SETTINGS</span><h2 id="manage-title">Manage {course.title}</h2><div className="rename-row"><label className="field"><span>Course name</span><input value={name} onChange={event=>setName(event.target.value)} /></label><button className="secondary" disabled={saving||name.trim()===course.title} onClick={saveName}>{saving?"Saving…":"Rename"}</button></div><div className="manager-actions"><button className="primary" onClick={onAddMaterial}>＋ Add material</button><button className="secondary" onClick={onRecord}>● Record lecture</button><button className="secondary" onClick={onUploadAudio}>↥ Upload audio</button><button className="secondary" onClick={onExam}>✎ Make mock exam</button><button className="secondary" onClick={onRegenerate}>↻ Rebuild materials</button></div><div className="material-list"><span className="eyebrow">{course.materials.length} SAVED {course.materials.length===1?"ITEM":"ITEMS"}</span>{course.materials.map(material=><article key={material.id}><div className="material-kind" aria-hidden="true">{material.kind==="lecture"?"●":"▤"}</div><div><strong>{material.title}</strong><span>{material.kind} · {new Date(material.createdAt).toLocaleDateString()} · {material.source.split(/\s+/).length.toLocaleString()} words</span>{material.audio&&<AudioPlayer audioId={material.audio.id}/>}<small className="generation-status">{generationLabel(material)}</small></div><div className="material-ai-actions"><button className="secondary material-enhance" disabled={enhancing!==null} onClick={()=>void enhance(material.id,"hosted")}>{enhancing===`${material.id}:hosted`?"Enhancing…":"Use Learnade AI"}</button><button className="text-button material-device-ai" disabled={enhancing!==null} onClick={()=>void enhance(material.id,"device")}>{enhancing===`${material.id}:device`?"Working…":"Use on-device AI"}</button></div><button className="remove-material" onClick={()=>void onDeleteMaterial(course.id,material.id)} aria-label={`Remove ${material.title}`}>Remove</button></article>)}</div></div></div>;
 }
-function StudyMode({ mode, theme, onToggleTheme, title, source, materials, learningPackage, learnadeId, onChangeMode, onBack, onManage }: { mode: Mode; theme:Theme; onToggleTheme:()=>void; title: string; source: string; materials:CourseMaterial[]; learningPackage:LearningPackage; learnadeId:string; onChangeMode:(mode:Mode)=>void; onBack: () => void; onManage:()=>void }) {
+function StudyMode({ mode, theme, onToggleTheme, title, source, materials, learningPackage, learnadeId, focusSession, dispatchFocusSession, onChangeMode, onBack, onManage }: { mode: Mode; theme:Theme; onToggleTheme:()=>void; title: string; source: string; materials:CourseMaterial[]; learningPackage:LearningPackage; learnadeId:string; focusSession:FocusSessionState; dispatchFocusSession:(action:FocusSessionAction)=>void; onChangeMode:(mode:Mode)=>void; onBack: () => void; onManage:()=>void }) {
   const label = modes.find(m => m.id === mode)?.title || "Study";
   const [readerTarget,setReaderTarget]=useState<string|null>(null);
   const [readerReturnMode,setReaderReturnMode]=useState<Mode|null>(null);
   const reviewSource=(from:Mode,id:string)=>{setReaderTarget(id);setReaderReturnMode(from);onChangeMode("reader")};
   const returnFromReader=()=>{const next=readerReturnMode||"guide";setReaderTarget(null);setReaderReturnMode(null);onChangeMode(next)};
+  const openFocusTask=(nextMode:Mode)=>{if(nextMode==="reader"){setReaderTarget(null);setReaderReturnMode("focus")}onChangeMode(nextMode)};
   return <main className="study-shell" data-theme={theme}>
     <header className="study-topbar"><button className="brand" onClick={onBack}><span className="brand-mark">L</span><span className="brand-name">Learnade</span></button><div><small>COURSE</small><strong>{title}</strong></div><span className="study-actions"><ThemeToggle theme={theme} onToggle={onToggleTheme}/><button className="secondary study-manage" onClick={onManage}>Manage course</button><button className="secondary" onClick={onBack}>Exit session</button></span></header>
     <div className="study-layout">
@@ -365,7 +379,7 @@ function StudyMode({ mode, theme, onToggleTheme, title, source, materials, learn
         {mode === "plan" && <StudyPlan learningPackage={learningPackage} learnadeId={learnadeId} onNavigate={onChangeMode} onReview={(id)=>reviewSource("plan",id)} />}
         {mode === "reader" && <Reader learningPackage={learningPackage} materials={materials} title={title} target={readerTarget} onTargetChange={setReaderTarget} onReturn={readerReturnMode?returnFromReader:undefined} returnLabel={readerReturnMode?modes.find(item=>item.id===readerReturnMode)?.title:undefined} />}
         {mode === "speed" && <SpeedReader source={source} materials={materials} />}
-        {mode === "focus" && <FocusMode learningPackage={learningPackage} onNavigate={onChangeMode} />}
+        {mode === "focus" && <FocusMode learningPackage={learningPackage} session={focusSession} dispatch={dispatchFocusSession} onNavigate={openFocusTask} />}
         {mode === "brainrot" && <Brainrot source={learningPackage.narration} materials={materials} />}
         {mode === "guide" && <Guide learningPackage={learningPackage} onReview={(id)=>reviewSource("guide",id)} />}
         {mode === "cards" && <Cards cards={learningPackage.flashcards} sections={learningPackage.sections} materials={materials} learnadeId={learnadeId} onReview={(id)=>reviewSource("cards",id)} />}
@@ -373,6 +387,7 @@ function StudyMode({ mode, theme, onToggleTheme, title, source, materials, learn
         {mode === "exam" && <MockExam courseTitle={title} materials={materials} learnadeId={learnadeId} onReview={(id)=>reviewSource("exam",id)} />}
       </section>
     </div>
+    {mode!=="focus"&&focusSession.engaged&&<FocusTimerDock session={focusSession} dispatch={dispatchFocusSession} onReturn={()=>onChangeMode("focus")} />}
   </main>;
 }
 function CourseDashboard({courseTitle,learningPackage,learnadeId,materialCount,onNavigate,onReview}:{courseTitle:string;learningPackage:LearningPackage;learnadeId:string;materialCount:number;onNavigate:(mode:Mode)=>void;onReview:(id:string)=>void}) {
@@ -408,10 +423,13 @@ function SpeedReader({ source, materials }: { source: string; materials:CourseMa
   const word = words[index] || "Ready"; const pivot = Math.min(word.length-1,Math.max(0,Math.floor(word.length * .4)));
   return <div className="speed-panel"><span className="eyebrow">RAPID SERIAL VISUAL PRESENTATION</span><MaterialPicker materials={materials} value={materialId} onChange={value=>{setMaterialId(value);setIndex(0);setPlaying(false)}}/><p className="reader-context">Pick a lecture or upload above. The highlighted recognition letter stays fixed in the center.</p><div className="speed-word"><span>{word.slice(0,pivot)}</span><em>{word[pivot]}</em><span>{word.slice(pivot+1)}</span></div><div className="speed-line" role="progressbar" aria-valuemin={0} aria-valuemax={words.length} aria-valuenow={index+1}><i style={{width: `${((index+1) / Math.max(1,words.length)) * 100}%`}} /></div><div className="speed-controls"><button onClick={() => setIndex(Math.max(0,index-10))}>↶ 10</button><button className="play" onClick={() => {if(!playing&&index===words.length-1)setIndex(0);setPlaying(!playing)}} aria-label={playing ? "Pause speed reader" : index===words.length-1?"Replay speed reader":"Play speed reader"}>{playing ? <PauseIcon /> : <PlayIcon />}</button><button onClick={() => setIndex(Math.min(words.length-1,index+10))}>10 ↷</button></div><label className="wpm">{wpm} words per minute<input type="range" min="100" max="700" step="25" value={wpm} onChange={e => setWpm(+e.target.value)} /></label><p className="calm-note">Start at a pace that feels comfortable. Comprehension matters more than speed.</p></div>;
 }
-function FocusMode({learningPackage,onNavigate}:{learningPackage:LearningPackage;onNavigate:(mode:Mode)=>void}) {
-  const [seconds,setSeconds]=useState(12*60);const [running,setRunning]=useState(false);const [done,setDone]=useState<boolean[]>([false,false,false]);const [round,setRound]=useState(0);const [celebration,setCelebration]=useState("");
-  useEffect(()=>{if(!running)return;const timer=setInterval(()=>setSeconds(value=>{if(value<=1){setRunning(false);return 0}return value-1}),1000);return()=>clearInterval(timer)},[running]);
-  const section=learningPackage.sections[round%Math.max(1,learningPackage.sections.length)]?.title||"your first section";
+function FocusTimerDock({session,dispatch,onReturn}:{session:FocusSessionState;dispatch:(action:FocusSessionAction)=>void;onReturn:()=>void}) {
+  const actionLabel=session.running?"Pause":session.seconds===0?"Start again":session.seconds===DEFAULT_FOCUS_SECONDS?"Start":"Resume";
+  return <section className="focus-session-dock" aria-label="Active focus session"><div><span>FOCUS SESSION</span><time role="timer" aria-label={`${Math.floor(session.seconds/60)} minutes ${session.seconds%60} seconds remaining`}>{formatFocusTime(session.seconds)}</time></div><button className="secondary" onClick={()=>dispatch({type:"toggle-running"})}>{actionLabel}</button><button className="primary" onClick={onReturn}>Back to focus session</button></section>;
+}
+
+function FocusMode({learningPackage,session,dispatch,onNavigate}:{learningPackage:LearningPackage;session:FocusSessionState;dispatch:(action:FocusSessionAction)=>void;onNavigate:(mode:Mode)=>void}) {
+  const section=learningPackage.sections[session.round%Math.max(1,learningPackage.sections.length)]?.title||"your first section";
   const taskSets=[[
     {label:`Read ${section}`,time:"4 min",mode:"reader" as Mode},
     {label:`Review ${Math.min(8,learningPackage.flashcards.length)} flashcards`,time:"4 min",mode:"cards" as Mode},
@@ -421,12 +439,9 @@ function FocusMode({learningPackage,onNavigate}:{learningPackage:LearningPackage
     {label:`Read ${section} in a format that works for you`,time:"4 min",mode:"reader" as Mode},
     {label:"Check your understanding",time:"4 min",mode:"quiz" as Mode}
   ]];
-  const tasks=taskSets[round%taskSets.length];const allDone=done.every(Boolean);
-  const toggle=(index:number)=>setDone(current=>{const next=current.map((value,item)=>item===index?!value:value);const finished=next.every(Boolean);setCelebration(finished?"Session complete. Nice work, you kept the promise to yourself.":next[index]?"Nice. One small step finished.":"");return next});
-  const newSession=()=>{setRound(value=>value+1);setDone([false,false,false]);setSeconds(12*60);setRunning(false);setCelebration("A fresh session is ready.")};
-  const reset=()=>{setSeconds(12*60);setRunning(false);setCelebration("Timer reset to 12 minutes.")};
-  const shorten=()=>{setSeconds(Math.min(seconds,5*60));setRunning(false);setCelebration("Timer set to five focused minutes.")};
-  return <div className="focus-panel"><span className="eyebrow">ONE SMALL STEP AT A TIME</span><h2>Your focus session</h2><p>Each task opens the exact learning mode you need. Check it off when you are done.</p><div className="timer" role="timer" aria-label={`${Math.floor(seconds/60)} minutes ${seconds%60} seconds remaining`}>{String(Math.floor(seconds/60)).padStart(2,"0")}<i>:</i>{String(seconds%60).padStart(2,"0")}</div><div className="focus-timer-actions"><button className="primary focus-start" onClick={()=>{if(seconds===0)setSeconds(12*60);setRunning(value=>!value)}}>{running?<><PauseIcon/>Pause</>:<><PlayIcon/>{seconds===0?"Start another session":"Start focus"}</>}</button><button className="secondary" onClick={shorten}>5 minutes</button><button className="secondary" onClick={reset}>Reset</button></div><div className="task-list" aria-live="polite">{tasks.map((task,index)=><article className={done[index]?"done":""} key={`${round}-${task.label}`}><label><input type="checkbox" checked={done[index]} onChange={()=>toggle(index)}/><span><strong>{task.label}</strong><small>{task.time}</small></span></label><button className="secondary" onClick={()=>onNavigate(task.mode)}>Open</button></article>)}</div>{celebration&&<p className={`focus-celebration ${allDone?"complete":""}`} role="status">{allDone?"✦ ":"✓ "}{celebration}</p>}<button className="text-button" onClick={newSession}>{allDone?"Plan another focused session":"Make a different session"}</button></div>;
+  const tasks=taskSets[session.round%taskSets.length];const allDone=session.done.every(Boolean);
+  const startLabel=session.seconds===0?"Start another session":session.seconds===DEFAULT_FOCUS_SECONDS?"Start focus":"Resume focus";
+  return <div className="focus-panel"><span className="eyebrow">ONE SMALL STEP AT A TIME</span><h2>Your focus session</h2><p>Each task opens the exact learning mode you need. The timer stays with you while you work, and every task brings you back here.</p><div className="timer" role="timer" aria-label={`${Math.floor(session.seconds/60)} minutes ${session.seconds%60} seconds remaining`}>{String(Math.floor(session.seconds/60)).padStart(2,"0")}<i>:</i>{String(session.seconds%60).padStart(2,"0")}</div><div className="focus-timer-actions"><button className="primary focus-start" onClick={()=>dispatch({type:"toggle-running"})}>{session.running?<><PauseIcon/>Pause</>:<><PlayIcon/>{startLabel}</>}</button><button className="secondary" onClick={()=>dispatch({type:"shorten"})}>5 minutes</button><button className="secondary" onClick={()=>dispatch({type:"reset"})}>Reset</button></div><div className="task-list" aria-live="polite">{tasks.map((task,index)=><article className={session.done[index]?"done":""} key={`${session.round}-${task.label}`}><label><input type="checkbox" checked={session.done[index]} onChange={()=>dispatch({type:"toggle-task",index})}/><span><strong>{task.label}</strong><small>{task.time}</small></span></label><button className="secondary" onClick={()=>onNavigate(task.mode)}>Open</button></article>)}</div>{session.celebration&&<p className={`focus-celebration ${allDone?"complete":""}`} role="status">{allDone?"✦ ":"✓ "}{session.celebration}</p>}<button className="text-button" onClick={()=>dispatch({type:"new-session"})}>{allDone?"Plan another focused session":"Make a different session"}</button></div>;
 }
 function Brainrot({ source, materials }: { source: string; materials:CourseMaterial[] }) {
   const [materialId,setMaterialId]=useState("all");const [speaking,setSpeaking]=useState(false);const [speechSupported,setSpeechSupported]=useState(true);const run=useRef(0);const [visual,setVisual]=useState<"minecraft"|"subway"|"none">("minecraft");

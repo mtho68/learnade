@@ -348,6 +348,11 @@ nav { display:flex; gap:28px; }
 .caption { margin:16px 0 0; }
 .focus-timer-actions { display:flex; justify-content:center; flex-wrap:wrap; gap:10px; margin:20px 0; }
 .focus-timer-actions button { min-height:42px; }
+.focus-session-dock { position:fixed; right:22px; bottom:22px; z-index:40; display:flex; align-items:center; gap:10px; padding:12px; border:1px solid var(--line); border-radius:16px; background:rgba(255,253,247,.97); color:var(--ink); box-shadow:0 14px 35px rgba(27,39,32,.18); backdrop-filter:blur(14px); }
+.focus-session-dock>div { display:flex; flex-direction:column; min-width:92px; }
+.focus-session-dock span { color:var(--muted); font-size:9px; font-weight:800; letter-spacing:.12em; }
+.focus-session-dock time { font:28px/1.1 Georgia,serif; font-variant-numeric:tabular-nums; }
+.focus-session-dock button { min-height:42px; white-space:nowrap; }
 .task-list article { display:flex; align-items:center; justify-content:space-between; gap:12px; border:1px solid var(--line); border-radius:14px; padding:14px; background:var(--paper); }
 .task-list article + article { margin-top:10px; }
 .task-list article.done { border-color:#6b9b78; background:#edf7ef; }
@@ -358,6 +363,13 @@ nav { display:flex; gap:28px; }
 .task-list article .secondary { min-height:36px; padding:0 12px; }
 .focus-celebration { background:#edf7ef; border:1px solid #7fa88b; color:#244d30; border-radius:12px; padding:12px; font-weight:700; }
 .focus-celebration.complete { background:#fff4bd; border-color:#d2ae2c; }
+
+@media (max-width:620px) {
+  .focus-session-dock { left:10px; right:10px; bottom:10px; display:grid; grid-template-columns:1fr auto; }
+  .focus-session-dock .primary { grid-column:1 / -1; }
+}
+
+[data-theme="dark"] .focus-session-dock { background:rgba(24,33,28,.97); }
 .custom-card-form { display:grid; gap:10px; margin:14px 0 20px; padding:16px; border:1px solid var(--line); border-radius:14px; text-align:left; }
 .custom-card-form label { display:grid; gap:6px; font-size:13px; font-weight:700; }
 .custom-card-form input { min-height:42px; padding:0 12px; border:1px solid var(--line); border-radius:9px; background:var(--paper); color:var(--ink); }
