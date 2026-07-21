@@ -69,5 +69,5 @@ Next steps include usability testing with students and accessibility specialists
 ## Links
 
 - Live application: https://learnade.hannahandmattthorsen.chatgpt.site
-- Code repository: add the public GitHub URL after publication
+- Code repository: https://github.com/mtho68/learnade
 - Codex feedback session ID: `019f819c-1609-72c2-b866-8b00dcc676c8`
