@@ -26,7 +26,7 @@ Learnade turns PDFs, documents, slides, notes, and lecture transcripts into a br
 
 The adaptive loop is central to Learnade. Diagnostic answers, quiz and exam results, and flashcard outcomes update mastery, return weak concepts for review, and change the recommended next activity.
 
-A fresh visitor can choose a complete Anatomy & Physiology or Computer Science demo. The app does not invent learner history or fake progress. Courses and progress stay in the browser, and learners do not need an account or API key.
+A fresh visitor can choose a complete Anatomy & Physiology or Computer Science demo. The app does not invent learner history or fake progress. Courses and progress stay in that browser on that device, so learners do not need an account or API key. There is no cloud sync, and clearing site data removes the local library.
 
 ### How we built it
 

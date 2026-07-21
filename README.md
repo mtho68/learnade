@@ -18,7 +18,7 @@ Learnade is an educational support tool. It does not claim to diagnose, treat, o
 - Builds source-grounded study guides, flashcards, practice quizzes, diagnostics, and mock exams
 - Tracks concept mastery, spaced review, and missed material to recommend what to study next
 - Lets learners select the relevant course materials in supported study modes
-- Stores courses and progress locally in the browser without requiring an account
+- Stores courses and progress in that browser on that device without requiring an account. There is no cloud sync, and clearing site data removes the local library.
 - Offers an instant deterministic generator, an optional browser-local Qwen model, and an optional protected GPT-5.6 Terra enhancement
 
 ## Try the complete demo
@@ -61,7 +61,7 @@ Learners never provide an OpenAI key.
 - **On-device AI:** Supported browsers can optionally download `onnx-community/Qwen2.5-0.5B-Instruct` and generate study material locally with WebGPU.
 - **Instant local mode:** A deterministic source-grounded generator works without a model download or network request.
 
-Uploaded text, generated material, and study progress are stored in the browser. The GPT-5.6 enhancement is optional and clearly labeled.
+Uploaded text, generated material, and study progress are stored in the browser on that device. This browser-only memory does not require an account, but it does not sync to other devices. The GPT-5.6 enhancement is optional and clearly labeled on each course dashboard when it was actually used.
 
 ## Technology
 

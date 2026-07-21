@@ -9,7 +9,7 @@ import { generateWithLearnadeAI } from "../lib/hostedAI";
 import { transcribeAudioOnDevice } from "../lib/audioTranscription";
 import { deleteLectureAudio, deleteLibraryItem, loadLectureAudio, loadLibrary, saveLectureAudio, saveLibraryItem } from "../lib/storage";
 import { masteryPercent, recordAnswer, scheduleCard, type CardReview, type SectionMastery } from "../lib/mastery";
-import { addCourseMaterial, combineCourseMaterials, courseSource, normalizeCourse, removeCourseMaterial, renameCourse, type CourseMaterial, type MaterialKind, type SavedCourse } from "../lib/courseLibrary";
+import { addCourseMaterial, combineCourseMaterials, courseGenerationSummary, courseSource, normalizeCourse, removeCourseMaterial, renameCourse, type CourseMaterial, type MaterialKind, type SavedCourse } from "../lib/courseLibrary";
 import { buildMockExam, gradeMockExam, type MockExam as MockExamData } from "../lib/mockExam";
 import { buildDashboardSnapshot, type AttemptSummary, type DashboardSnapshot } from "../lib/courseDashboard";
 import { createDemoCourse, DEMO_COURSES, DEMO_COURSE_IDS, SAMPLE_COURSE_ID } from "../lib/sampleCourse";
@@ -313,7 +313,8 @@ export default function LearnadeApp() {
       </section>
 
       <section className="library-section" id="library">
-        <div className="section-heading"><div data-tour="library"><span className="eyebrow">SAVED ON THIS DEVICE</span><h2>My learning library</h2></div><p>Your documents and progress stay in this browser.</p></div>
+        <div className="section-heading"><div data-tour="library"><span className="eyebrow">SAVED ON THIS DEVICE</span><h2>My learning library</h2></div><p>Stored in this browser only. No account or cloud sync.</p></div>
+        <div className="local-memory-note"><strong>How Learnade remembers without an account</strong><p>Your courses and study progress are saved in this browser on this device. They will not follow you to another device, and clearing this site&apos;s browser data removes them.</p></div>
         {libraryLoaded&&library.length === 0 ? <div className="library-empty"><strong>Your first course will appear here.</strong><p>Create one from your own material, or explore a complete sample first.</p><div className="empty-actions"><button className="primary" onClick={()=>void openSample()}>Explore sample course</button><button className="secondary" onClick={()=>setUploadTarget({})}>Create my own</button></div></div> : <div className="library-grid">{library.map(item=><article key={item.id}><button className="library-open" onClick={()=>openItem(item)}><span className="material-icon">L</span><span><small>{item.id===SAMPLE_COURSE_ID?"READY-MADE DEMO":`UPDATED ${new Date(item.updatedAt).toLocaleDateString()}`}</small><strong>{item.title}</strong><em>{item.materials.length} {item.materials.length===1?"source":"sources"} · {item.package.flashcards.length} cards</em></span></button><div className="course-actions"><button onClick={()=>setUploadTarget({courseId:item.id})}>＋ Material</button><button onClick={()=>setRecordTarget({courseId:item.id})}>● Lecture</button><button onClick={()=>setManageCourseId(item.id)}>Manage</button></div><button className="delete-item" onClick={()=>deleteItem(item.id)} aria-label={`Delete ${item.title}`}>×</button></article>)}</div>}
       </section>
 
@@ -375,7 +376,7 @@ function StudyMode({ mode, theme, onToggleTheme, title, source, materials, learn
     <div className="study-layout">
       <aside><button className="back-link" onClick={onBack}>← <span>All modes</span></button><span className="eyebrow">LEARNING MODE</span><h1>{label}</h1><p>Switch whenever your attention or energy changes.</p><div className="side-progress"><span>Ready to study</span><strong>{learningPackage.sections.length}</strong><span>source sections</span></div></aside>
       <section className="workspace">
-        {mode === "dashboard" && <CourseDashboard courseTitle={title} learningPackage={learningPackage} learnadeId={learnadeId} materialCount={materials.length} onNavigate={onChangeMode} onReview={(id)=>reviewSource("dashboard",id)} />}
+        {mode === "dashboard" && <><CourseGenerationBanner materials={materials}/><CourseDashboard courseTitle={title} learningPackage={learningPackage} learnadeId={learnadeId} materialCount={materials.length} onNavigate={onChangeMode} onReview={(id)=>reviewSource("dashboard",id)} /></>}
         {mode === "plan" && <StudyPlan learningPackage={learningPackage} learnadeId={learnadeId} onNavigate={onChangeMode} onReview={(id)=>reviewSource("plan",id)} />}
         {mode === "reader" && <Reader learningPackage={learningPackage} materials={materials} title={title} target={readerTarget} onTargetChange={setReaderTarget} onReturn={readerReturnMode?returnFromReader:undefined} returnLabel={readerReturnMode?modes.find(item=>item.id===readerReturnMode)?.title:undefined} />}
         {mode === "speed" && <SpeedReader source={source} materials={materials} />}
@@ -390,6 +391,11 @@ function StudyMode({ mode, theme, onToggleTheme, title, source, materials, learn
     {mode!=="focus"&&focusSession.engaged&&<FocusTimerDock session={focusSession} dispatch={dispatchFocusSession} onReturn={()=>onChangeMode("focus")} />}
   </main>;
 }
+function CourseGenerationBanner({materials}:{materials:CourseMaterial[]}) {
+  const generation=courseGenerationSummary(materials);
+  return <section className={`generation-banner ${generation.kind}`} aria-label="Course generation method"><div><span className="eyebrow">{generation.eyebrow}</span><strong>{generation.title}</strong></div><p>{generation.description}</p></section>;
+}
+
 function CourseDashboard({courseTitle,learningPackage,learnadeId,materialCount,onNavigate,onReview}:{courseTitle:string;learningPackage:LearningPackage;learnadeId:string;materialCount:number;onNavigate:(mode:Mode)=>void;onReview:(id:string)=>void}) {
   const [snapshot,setSnapshot]=useState<DashboardSnapshot|null>(null);
   useEffect(()=>{const timer=setTimeout(()=>{const read=(key:string)=>{try{return JSON.parse(localStorage.getItem(key)||"null")}catch{return null}};setSnapshot(buildDashboardSnapshot(learningPackage,read(`learnade-mastery-${learnadeId}`)||{},read(`learnade-card-srs-${learnadeId}`)||{},read(`learnade-quiz-${learnadeId}`) as AttemptSummary|null,read(`learnade-exam-${learnadeId}`) as AttemptSummary|null))},0);return()=>clearTimeout(timer)},[learningPackage,learnadeId]);

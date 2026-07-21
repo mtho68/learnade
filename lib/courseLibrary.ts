@@ -23,6 +23,48 @@ export type SavedCourse = {
   materials: CourseMaterial[];
 };
 
+export type CourseGenerationSummary = {
+  kind: "hosted-ai" | "on-device-ai" | "local";
+  eyebrow: string;
+  title: string;
+  description: string;
+};
+
+export function courseGenerationSummary(materials: CourseMaterial[]): CourseGenerationSummary {
+  const total = Math.max(1, materials.length);
+  const hostedCount = materials.filter(material => material.generation?.mode === "gpt-5.6-terra").length;
+  const deviceCount = materials.filter(material => material.generation?.mode === "on-device-ai").length;
+
+  if (hostedCount > 0) {
+    return {
+      kind: "hosted-ai",
+      eyebrow: "AI-ENHANCED COURSE",
+      title: hostedCount === total
+        ? "This course has been enhanced by Learnade AI."
+        : `${hostedCount} of ${total} sources have been enhanced by Learnade AI.`,
+      description: "GPT-5.6 Terra created source-grounded study materials. Study progress stays in this browser; selected source text is sent to Learnade's protected service only when you choose this option.",
+    };
+  }
+
+  if (deviceCount > 0) {
+    return {
+      kind: "on-device-ai",
+      eyebrow: "ON-DEVICE AI COURSE",
+      title: deviceCount === total
+        ? "This course was enhanced by AI on this device."
+        : `${deviceCount} of ${total} sources were enhanced by AI on this device.`,
+      description: "The optional browser model created source-grounded study materials locally. Your course and progress remain in this browser.",
+    };
+  }
+
+  return {
+    kind: "local",
+    eyebrow: "PRIVATE LOCAL COURSE",
+    title: "This course was built locally, without a language model.",
+    description: "Learnade used its instant source-grounded generator. You can choose Learnade AI from Manage course if you want AI-enhanced cards, questions, and explanations.",
+  };
+}
+
 type LegacyCourse = Omit<SavedCourse, "updatedAt" | "materials"> & { updatedAt?: string; materials?: CourseMaterial[] };
 
 const prefixPackage = (material: CourseMaterial) => {
