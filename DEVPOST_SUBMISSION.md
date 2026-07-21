@@ -32,7 +32,7 @@ A fresh visitor can choose a complete Anatomy & Physiology or Computer Science d
 
 Learnade uses React, TypeScript, Vite, vinext, and OpenAI Sites. Course content and progress are stored locally with IndexedDB and local storage. PDF.js, Mammoth, and JSZip extract uploaded source material.
 
-Study material can be produced in three ways. The instant deterministic generator works without a download or network request. Supported browsers can optionally run a small Qwen model locally through Transformers.js and WebGPU. Selected material can also use Learnade AI through a protected, rate-limited server route powered by GPT-5.6 Terra. Learners never provide or see the server key.
+Study material can be produced in three ways. The instant deterministic generator works without a download or network request. Supported browsers can optionally run a small Qwen model locally through Transformers.js and WebGPU. Selected material can also use OpenAI GPT-5.6 Terra through Learnade's protected, rate-limited server route. Learners never provide or see the server key.
 
 ### How we used GPT-5.6 and Codex
 

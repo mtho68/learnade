@@ -57,13 +57,13 @@ function asDraft(value: unknown): AIStudyDraft | null {
 
 export async function POST(request: Request) {
   const key = process.env.OPENAI_API_KEY;
-  if (!key) return json({ error: "Learnade AI has not been activated yet. This course can still use the private local generator." }, { status: 503 });
-  if (!permit(request)) return json({ error: "Learnade AI has reached its temporary demo limit. Try again in about 30 minutes." }, { status: 429 });
+  if (!key) return json({ error: "GPT-5.6 Terra has not been activated yet. This course can still use the private local generator." }, { status: 503 });
+  if (!permit(request)) return json({ error: "GPT-5.6 Terra has reached its temporary demo limit. Try again in about 30 minutes." }, { status: 429 });
   const body = await request.json().catch(() => null) as RequestBody | null;
   const source = typeof body?.source === "string" ? body.source.trim() : "";
   const title = typeof body?.title === "string" ? body.title.trim().slice(0, 160) : "Study material";
-  if (source.length < 40) return json({ error: "Add more source material before using Learnade AI." }, { status: 400 });
-  if (source.length > MAX_SOURCE_CHARS) return json({ error: "Choose one source under 30,000 characters for Learnade AI. Long courses can be enhanced one lecture at a time." }, { status: 413 });
+  if (source.length < 40) return json({ error: "Add more source material before using GPT-5.6 Terra." }, { status: 400 });
+  if (source.length > MAX_SOURCE_CHARS) return json({ error: "Choose one source under 30,000 characters for GPT-5.6 Terra. Long courses can be enhanced one lecture at a time." }, { status: 413 });
   const prompt = `You build rigorous, source-grounded study materials for the course titled ${title}. Use only the source text. Do not invent facts. Return 6-10 distinct, stand-alone academic key terms and flashcards. Each flashcard front must be a specific named concept, never a sentence fragment, pronoun, generic word, ordinal fact, or vague phrase. Each definition must stand alone. Create 8 non-trivial quiz questions with exactly four plausible options, one defensible correct answer, and an explanation grounded in the source. Do not put the answer word in a fill-in-the-blank prompt. Use a mix of recall, relationship, and application questions when the source supports it. Narration should be clear, accurate, and organized for listening.\n\nSOURCE:\n${source}`;
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
@@ -77,12 +77,12 @@ export async function POST(request: Request) {
     }),
   });
   const payload = await response.json().catch(() => ({})) as OpenAIResponse;
-  if (!response.ok) return json({ error: typeof payload.error?.message === "string" ? payload.error.message : "Learnade AI could not complete this generation." }, { status: 502 });
+  if (!response.ok) return json({ error: typeof payload.error?.message === "string" ? payload.error.message : "GPT-5.6 Terra could not complete this generation." }, { status: 502 });
   try {
     const draft = asDraft(JSON.parse(outputText(payload)));
     if (!draft) throw new Error("invalid");
     return json({ package: draft, model: MODEL });
   } catch {
-    return json({ error: "Learnade AI returned an incomplete study package. Please try again." }, { status: 502 });
+    return json({ error: "GPT-5.6 Terra returned an incomplete study package. Please try again." }, { status: 502 });
   }
 }

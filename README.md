@@ -60,7 +60,7 @@ This history is intentionally specific. The original ChatGPT work is not represe
 
 Learners never provide an OpenAI key.
 
-- **Learnade AI:** Selected source material can be sent to a protected, rate-limited server route using GPT-5.6 Terra. The key stays in the hosting environment.
+- **GPT-5.6 Terra via Learnade:** Selected source material can be sent to a protected, rate-limited server route using OpenAI GPT-5.6 Terra. The key stays in the hosting environment.
 - **On-device AI:** Supported browsers can optionally download `onnx-community/Qwen2.5-0.5B-Instruct` and generate study material locally with WebGPU.
 - **Instant local mode:** A deterministic source-grounded generator works without a model download or network request.
 

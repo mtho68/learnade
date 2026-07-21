@@ -14,8 +14,8 @@ const material = (mode) => ({
 });
 
 test("course dashboard provenance describes only AI that was actually used", () => {
-  assert.equal(courseGenerationSummary([material("gpt-5.6-terra")]).eyebrow, "AI-ENHANCED COURSE");
-  assert.match(courseGenerationSummary([material("gpt-5.6-terra")]).title, /enhanced by Learnade AI/);
+  assert.equal(courseGenerationSummary([material("gpt-5.6-terra")]).eyebrow, "GPT-5.6-ENHANCED COURSE");
+  assert.match(courseGenerationSummary([material("gpt-5.6-terra")]).title, /enhanced with OpenAI GPT-5.6 Terra/);
   assert.equal(courseGenerationSummary([material("on-device-ai")]).eyebrow, "ON-DEVICE AI COURSE");
   assert.equal(courseGenerationSummary([material()]).eyebrow, "PRIVATE LOCAL COURSE");
   assert.match(courseGenerationSummary([material()]).title, /without a language model/);

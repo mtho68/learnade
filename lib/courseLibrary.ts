@@ -38,11 +38,11 @@ export function courseGenerationSummary(materials: CourseMaterial[]): CourseGene
   if (hostedCount > 0) {
     return {
       kind: "hosted-ai",
-      eyebrow: "AI-ENHANCED COURSE",
+      eyebrow: "GPT-5.6-ENHANCED COURSE",
       title: hostedCount === total
-        ? "This course has been enhanced by Learnade AI."
-        : `${hostedCount} of ${total} sources have been enhanced by Learnade AI.`,
-      description: "GPT-5.6 Terra created source-grounded study materials. Study progress stays in this browser; selected source text is sent to Learnade's protected service only when you choose this option.",
+        ? "This course was enhanced with OpenAI GPT-5.6 Terra."
+        : `${hostedCount} of ${total} sources were enhanced with OpenAI GPT-5.6 Terra.`,
+      description: "GPT-5.6 Terra created source-grounded study materials through Learnade's protected service. Study progress stays in this browser; selected source text is sent to the service only when you choose this option.",
     };
   }
 
@@ -61,7 +61,7 @@ export function courseGenerationSummary(materials: CourseMaterial[]): CourseGene
     kind: "local",
     eyebrow: "PRIVATE LOCAL COURSE",
     title: "This course was built locally, without a language model.",
-    description: "Learnade used its instant source-grounded generator. You can choose Learnade AI from Manage course if you want AI-enhanced cards, questions, and explanations.",
+    description: "Learnade used its instant source-grounded generator. You can choose GPT-5.6 Terra from Manage course if you want AI-enhanced cards, questions, and explanations.",
   };
 }
 
