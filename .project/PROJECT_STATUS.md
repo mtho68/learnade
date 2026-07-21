@@ -32,7 +32,7 @@
   - Updated the Devpost project page with accurate GPT-5.6 and Codex history plus the live app link.
   - Published the public GitHub repository and added its URL to the submission copy.
   - Fixed focus-session continuity and made generation provenance and browser-only memory visible.
-  - Published and verified OpenAI Sites version 32 after a complete repeated-button consistency audit at desktop and 375-pixel widths.
+  - Published and verified OpenAI Sites version 33 after fixing the course-manager scrollbar and permanently visible close control at desktop and 375-pixel widths.
 - In progress:
   - Narrated demo video.
 - Next:
@@ -41,7 +41,7 @@
 ## Health
 - Status: amber
 - Risks / blockers: .project/RISKS.md
-- Latest verification: npm test passed on 2026-07-21, production build and artifact validation passed, 30 of 30 tests passed; Sites version 32 is public and has no horizontal overflow at 1280 or 375 pixels.
+- Latest verification: npm test passed on 2026-07-21, production build and artifact validation passed, 30 of 30 tests passed; Sites version 33 is public, the long course manager closes from its bottom scroll position, and there is no horizontal overflow at 375 pixels.
 
 ## Navigation
 - Detailed plan: `.project/PLAN.md`

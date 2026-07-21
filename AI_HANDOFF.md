@@ -15,7 +15,8 @@ Record the narrated demo video, add the YouTube URL and remaining personal field
 - Corrected production metadata tests and documented the ChatGPT-origin/Codex-polish history truthfully.
 - Fixed focus-session navigation so the timer and checklist remain active while opening sources or switching modes, with a clear return path.
 - Added visible per-course generation provenance and an explicit explanation of browser-only memory without an account.
-- Published Sites version 32 from commit d8bfb8b800c95f56539009e268e20e0322c1274b and verified the public URL.
+- Published Sites version 33 from commit 4c652b0664e612d38935ee2a4f47d9500303ec69 and verified the public URL.
+- Moved course-manager scrolling into a clipped inner panel so its scrollbar fits the rounded modal and the close button remains visible and clickable at every scroll position.
 - Standardized the five course-management actions to equal icon-over-label buttons with a responsive mobile grid, removed a global secondary-button offset, and gave all three course-card actions the same icon-plus-label structure.
 - Added a Build Week-ready README, MIT license, and DEVPOST_SUBMISSION.md.
 - Published the public GitHub repository at https://github.com/mtho68/learnade and recorded it in the submission copy.
@@ -40,7 +41,7 @@ Record the narrated demo video, add the YouTube URL and remaining personal field
 - Command: npm test through Git Bash
   Result: Passed on 2026-07-21. Production build and Sites artifact validation succeeded; all 30 tests passed. One pre-existing lint warning and the existing bundle-size warning remain.
 - Hands-on browser QA
-  Result: Passed fresh empty state, explicit demo selection, Reader, Flashcards, Quiz, Mock Exam, focus trap and return, dark mode, completion persistence, and all 12 tour steps at 375px width without horizontal overflow or tooltip/control overlap. The final button audit also passed at 1280 and 375 pixels with aligned control groups and no horizontal overflow.
+  Result: Passed fresh empty state, explicit demo selection, Reader, Flashcards, Quiz, Mock Exam, focus trap and return, dark mode, completion persistence, and all 12 tour steps at 375px width without horizontal overflow or tooltip/control overlap. The final button audit passed at 1280 and 375 pixels. Course-manager scrolling passed at a short desktop viewport and 375px mobile, with the close control visible and clickable at the bottom.
 
 ## Known issues, risks, and blockers
 - The narrated YouTube video, required personal fields, and final Devpost submission are still pending.
@@ -53,10 +54,10 @@ Record the narrated demo video, add the YouTube URL and remaining personal field
 - Last updated at: 2026-07-21
 
 <!-- BEGIN GENERATED SNAPSHOT -->
-Generated at: 2026-07-21T00:39:23-07:00
+Generated at: 2026-07-21T10:36:17-07:00
 Project root: K:\Projects\learnade
 Git branch: main
-HEAD: d8bfb8b
+HEAD: 4c652b0
 
 Git status:
 ```text
@@ -72,10 +73,10 @@ warning: in the working copy of '.project/PROJECT_STATUS.md', LF will be replace
 warning: in the working copy of 'AI_HANDOFF.md', LF will be replaced by CRLF the next time Git touches it
 warning: in the working copy of 'DEVPOST_SUBMISSION.md', LF will be replaced by CRLF the next time Git touches it
 warning: in the working copy of 'README.md', LF will be replaced by CRLF the next time Git touches it
- .project/PROJECT_STATUS.md | 6 +++---
- AI_HANDOFF.md              | 8 ++++----
+ .project/PROJECT_STATUS.md | 4 ++--
+ AI_HANDOFF.md              | 5 +++--
  DEVPOST_SUBMISSION.md      | 2 +-
- README.md                  | 9 +++++----
- 4 files changed, 13 insertions(+), 12 deletions(-)
+ README.md                  | 8 ++++----
+ 4 files changed, 10 insertions(+), 9 deletions(-)
 ```
 <!-- END GENERATED SNAPSHOT -->
